@@ -26,12 +26,12 @@ const logger = winston.createLogger({
 });
 
 const brocadeConfig: BrocadeConfig = {
-  host: process.env.BROCADE_HOST || 'localhost',
-  port: parseInt(process.env.BROCADE_PORT || '22'),
-  username: process.env.BROCADE_USERNAME || 'admin',
-  password: process.env.BROCADE_PASSWORD || '',
-  timeout: parseInt(process.env.SSH_TIMEOUT || '30000'),
-  keepaliveInterval: parseInt(process.env.SSH_KEEPALIVE_INTERVAL || '10000'),
+  host: process.env.BROCADE_HOST ?? 'localhost',
+  port: parseInt(process.env.BROCADE_PORT ?? '22'),
+  username: process.env.BROCADE_USERNAME ?? 'admin',
+  password: process.env.BROCADE_PASSWORD ?? '',
+  timeout: parseInt(process.env.SSH_TIMEOUT ?? '30000'),
+  keepaliveInterval: parseInt(process.env.SSH_KEEPALIVE_INTERVAL ?? '10000'),
 };
 
 const sshClient = new BrocadeSSHClient(brocadeConfig, logger);
@@ -47,7 +47,7 @@ const server = new Server(
       resources: {},
       tools: {},
     },
-  }
+  },
 );
 
 const GetSystemInfoSchema = z.object({});
@@ -87,47 +87,93 @@ const tools: Tool[] = [
   {
     name: 'get_system_info',
     description: 'Get system information from the Brocade switch',
-    inputSchema: GetSystemInfoSchema,
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
   },
   {
     name: 'get_vlans',
     description: 'Get all VLANs configured on the switch',
-    inputSchema: GetVlansSchema,
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
   },
   {
     name: 'get_interfaces',
     description: 'Get all interfaces and their status',
-    inputSchema: GetInterfacesSchema,
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
   },
   {
     name: 'get_mac_table',
     description: 'Get the MAC address table',
-    inputSchema: GetMacTableSchema,
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
   },
   {
     name: 'get_routing_table',
     description: 'Get the IP routing table',
-    inputSchema: GetRoutingTableSchema,
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
   },
   {
     name: 'configure_vlan',
     description: 'Create or configure a VLAN',
-    inputSchema: ConfigureVlanSchema,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        vlanId: { type: 'number', minimum: 1, maximum: 4094 },
+        name: { type: 'string' },
+      },
+      required: ['vlanId'],
+    },
   },
   {
     name: 'add_port_to_vlan',
     description: 'Add a port to a VLAN (tagged or untagged)',
-    inputSchema: AddPortToVlanSchema,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        port: { type: 'string' },
+        vlanId: { type: 'number', minimum: 1, maximum: 4094 },
+        tagged: { type: 'boolean' },
+      },
+      required: ['port', 'vlanId'],
+    },
   },
   {
     name: 'configure_interface',
     description: 'Configure interface settings',
-    inputSchema: ConfigureInterfaceSchema,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        interfaceName: { type: 'string' },
+        description: { type: 'string' },
+        enabled: { type: 'boolean' },
+        speed: { type: 'string' },
+        duplex: { type: 'string' },
+      },
+      required: ['interfaceName'],
+    },
   },
   {
     name: 'execute_command',
     description: 'Execute a raw CLI command on the switch',
-    inputSchema: ExecuteCommandSchema,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        command: { type: 'string' },
+      },
+      required: ['command'],
+    },
   },
 ];
 
@@ -158,44 +204,44 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
 
   try {
     switch (uri) {
-      case 'brocade://system/info':
-        const systemInfo = await commandExecutor.getSystemInfo();
-        return {
-          contents: [
-            {
-              uri,
-              mimeType: 'application/json',
-              text: JSON.stringify(systemInfo, null, 2),
-            },
-          ],
-        };
+    case 'brocade://system/info':
+      const systemInfo = await commandExecutor.getSystemInfo();
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify(systemInfo, null, 2),
+          },
+        ],
+      };
 
-      case 'brocade://config/vlans':
-        const vlans = await commandExecutor.getVlans();
-        return {
-          contents: [
-            {
-              uri,
-              mimeType: 'application/json',
-              text: JSON.stringify(vlans, null, 2),
-            },
-          ],
-        };
+    case 'brocade://config/vlans':
+      const vlans = await commandExecutor.getVlans();
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify(vlans, null, 2),
+          },
+        ],
+      };
 
-      case 'brocade://status/interfaces':
-        const interfaces = await commandExecutor.getInterfaces();
-        return {
-          contents: [
-            {
-              uri,
-              mimeType: 'application/json',
-              text: JSON.stringify(interfaces, null, 2),
-            },
-          ],
-        };
+    case 'brocade://status/interfaces':
+      const interfaces = await commandExecutor.getInterfaces();
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify(interfaces, null, 2),
+          },
+        ],
+      };
 
-      default:
-        throw new Error(`Unknown resource: ${uri}`);
+    default:
+      throw new Error(`Unknown resource: ${uri}`);
     }
   } catch (error) {
     logger.error(`Failed to read resource ${uri}:`, error);
@@ -212,120 +258,120 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     switch (name) {
-      case 'get_system_info':
-        const systemInfo = await commandExecutor.getSystemInfo();
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(systemInfo, null, 2),
-            },
-          ],
-        };
+    case 'get_system_info':
+      const systemInfo = await commandExecutor.getSystemInfo();
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(systemInfo, null, 2),
+          },
+        ],
+      };
 
-      case 'get_vlans':
-        const vlans = await commandExecutor.getVlans();
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(vlans, null, 2),
-            },
-          ],
-        };
+    case 'get_vlans':
+      const vlans = await commandExecutor.getVlans();
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(vlans, null, 2),
+          },
+        ],
+      };
 
-      case 'get_interfaces':
-        const interfaces = await commandExecutor.getInterfaces();
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(interfaces, null, 2),
-            },
-          ],
-        };
+    case 'get_interfaces':
+      const interfaces = await commandExecutor.getInterfaces();
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(interfaces, null, 2),
+          },
+        ],
+      };
 
-      case 'get_mac_table':
-        const macTable = await commandExecutor.getMacAddressTable();
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(macTable, null, 2),
-            },
-          ],
-        };
+    case 'get_mac_table':
+      const macTable = await commandExecutor.getMacAddressTable();
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(macTable, null, 2),
+          },
+        ],
+      };
 
-      case 'get_routing_table':
-        const routes = await commandExecutor.getRoutingTable();
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(routes, null, 2),
-            },
-          ],
-        };
+    case 'get_routing_table':
+      const routes = await commandExecutor.getRoutingTable();
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(routes, null, 2),
+          },
+        ],
+      };
 
-      case 'configure_vlan':
-        const vlanArgs = ConfigureVlanSchema.parse(args);
-        await commandExecutor.configureVlan(vlanArgs.vlanId, vlanArgs.name);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `VLAN ${vlanArgs.vlanId} configured successfully`,
-            },
-          ],
-        };
+    case 'configure_vlan':
+      const vlanArgs = ConfigureVlanSchema.parse(args);
+      await commandExecutor.configureVlan(vlanArgs.vlanId, vlanArgs.name);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `VLAN ${vlanArgs.vlanId} configured successfully`,
+          },
+        ],
+      };
 
-      case 'add_port_to_vlan':
-        const portArgs = AddPortToVlanSchema.parse(args);
-        await commandExecutor.addPortToVlan(
-          portArgs.port,
-          portArgs.vlanId,
-          portArgs.tagged
-        );
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Port ${portArgs.port} added to VLAN ${portArgs.vlanId}`,
-            },
-          ],
-        };
+    case 'add_port_to_vlan':
+      const portArgs = AddPortToVlanSchema.parse(args);
+      await commandExecutor.addPortToVlan(
+        portArgs.port,
+        portArgs.vlanId,
+        portArgs.tagged,
+      );
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Port ${portArgs.port} added to VLAN ${portArgs.vlanId}`,
+          },
+        ],
+      };
 
-      case 'configure_interface':
-        const ifaceArgs = ConfigureInterfaceSchema.parse(args);
-        await commandExecutor.configureInterface(ifaceArgs.interfaceName, {
-          description: ifaceArgs.description,
-          enabled: ifaceArgs.enabled,
-          speed: ifaceArgs.speed,
-          duplex: ifaceArgs.duplex,
-        });
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Interface ${ifaceArgs.interfaceName} configured successfully`,
-            },
-          ],
-        };
+    case 'configure_interface':
+      const ifaceArgs = ConfigureInterfaceSchema.parse(args);
+      await commandExecutor.configureInterface(ifaceArgs.interfaceName, {
+        description: ifaceArgs.description,
+        enabled: ifaceArgs.enabled,
+        speed: ifaceArgs.speed,
+        duplex: ifaceArgs.duplex,
+      });
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Interface ${ifaceArgs.interfaceName} configured successfully`,
+          },
+        ],
+      };
 
-      case 'execute_command':
-        const cmdArgs = ExecuteCommandSchema.parse(args);
-        const output = await sshClient.executeCommand(cmdArgs.command);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: output,
-            },
-          ],
-        };
+    case 'execute_command':
+      const cmdArgs = ExecuteCommandSchema.parse(args);
+      const output = await sshClient.executeCommand(cmdArgs.command);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: output,
+          },
+        ],
+      };
 
-      default:
-        throw new Error(`Unknown tool: ${name}`);
+    default:
+      throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error) {
     logger.error(`Failed to execute tool ${name}:`, error);
@@ -333,7 +379,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-async function main() {
+async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   logger.info('Brocade MCP stdio server started');

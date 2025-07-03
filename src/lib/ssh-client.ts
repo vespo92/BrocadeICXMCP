@@ -35,8 +35,8 @@ export class BrocadeSSHClient {
           port: this.config.port,
           username: this.config.username,
           password: this.config.password,
-          keepaliveInterval: this.config.keepaliveInterval || 10000,
-          readyTimeout: this.config.timeout || 30000,
+          keepaliveInterval: this.config.keepaliveInterval ?? 10000,
+          readyTimeout: this.config.timeout ?? 30000,
         });
     });
   }
