@@ -55,11 +55,7 @@ const server = new Server(
   },
 );
 
-const GetSystemInfoSchema = z.object({});
-const GetVlansSchema = z.object({});
-const GetInterfacesSchema = z.object({});
-const GetMacTableSchema = z.object({});
-const GetRoutingTableSchema = z.object({});
+// Zod schemas are kept for validation even though inputSchema uses JSON Schema
 
 const ConfigureVlanSchema = z.object({
   vlanId: z.number().min(1).max(4094),
@@ -489,18 +485,20 @@ async function main(): Promise<void> {
   });
 
   // SSE endpoint for client connections
-  app.get('/sse', async (req, res) => {
+  app.get('/sse', (req, res) => {
     const transport = new SSEServerTransport('/messages', res);
-    await server.connect(transport);
-    
+    server.connect(transport).catch((error) => {
+      logger.error('Failed to connect transport:', error);
+    });
+
     // Handle client disconnect
     req.on('close', () => {
-      transport.close();
+      void transport.close();
     });
   });
 
   // POST endpoint for receiving messages
-  app.post('/messages', express.json(), async (req, res) => {
+  app.post('/messages', express.json(), (req, res) => {
     // Handle incoming messages here
     // This would need to be connected to the appropriate SSE transport
     res.status(200).json({ success: true });

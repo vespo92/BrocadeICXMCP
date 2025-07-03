@@ -50,15 +50,7 @@ const server = new Server(
   },
 );
 
-const GetSystemInfoSchema = z.object({});
-
-const GetVlansSchema = z.object({});
-
-const GetInterfacesSchema = z.object({});
-
-const GetMacTableSchema = z.object({});
-
-const GetRoutingTableSchema = z.object({});
+// Zod schemas are kept for validation even though inputSchema uses JSON Schema
 
 const ConfigureVlanSchema = z.object({
   vlanId: z.number().min(1).max(4094),
