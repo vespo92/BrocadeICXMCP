@@ -1,5 +1,10 @@
 # Brocade MCP Server
 
+[![CI](https://github.com/vespo92/BrocadeICXMCP/actions/workflows/ci.yml/badge.svg)](https://github.com/vespo92/BrocadeICXMCP/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js Version](https://img.shields.io/node/v/brocade-mcp-server.svg)](https://nodejs.org)
+[![MCP Protocol](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-blue)](https://modelcontextprotocol.io)
+
 MCP (Model Context Protocol) servers for automating Brocade ICX 6450 switch management. This project provides both stdio and SSE-based MCP servers that interface with Brocade switches via SSH.
 
 ## Features
@@ -155,6 +160,10 @@ npm run lint
 npm run typecheck
 ```
 
+## Contributing
+
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to this project.
+
 ## License
 
-MIT
+MIT - See [LICENSE](LICENSE) for details
