@@ -9,12 +9,16 @@
     "start:stdio": "node dist/servers/stdio.js",
     "start:sse": "node dist/servers/sse.js",
     "test": "jest",
-    "lint": "eslint src/**/*.ts",
+    "lint": "eslint 'src/**/*.ts'",
     "typecheck": "tsc --noEmit"
   },
   "keywords": ["mcp", "brocade", "icx", "network", "automation"],
-  "author": "",
+  "author": "Vinnie Esposito",
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.1",
     "ssh2": "^1.15.0",
