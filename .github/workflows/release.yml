@@ -38,7 +38,7 @@ jobs:
           .env.example
     
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: brocade-mcp-server-${{ github.ref_name }}.tar.gz
         draft: false
