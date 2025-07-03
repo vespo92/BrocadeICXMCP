@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "brocade-stdio": {
+      "command": "npm",
+      "args": ["run", "start:stdio"],
+      "env": {
+        "BROCADE_HOST": "192.168.1.100",
+        "BROCADE_PORT": "22",
+        "BROCADE_USERNAME": "admin"
+      }
+    },
+    "brocade-sse": {
+      "command": "npm",
+      "args": ["run", "start:sse"],
+      "env": {
+        "BROCADE_HOST": "192.168.1.100",
+        "BROCADE_PORT": "22",
+        "BROCADE_USERNAME": "admin",
+        "SSE_PORT": "3000"
+      }
+    }
+  }
+}

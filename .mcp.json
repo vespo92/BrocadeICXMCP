@@ -1,0 +1,70 @@
+{
+  "profileName": "personal",
+  "description": "Personal development environment with full MCP server suite",
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "~/.config",
+        "/Users/vinnieespo/Desktop",
+        "/Users/vinnieespo/Downloads",
+        "/Users/vinnieespo/Projects",
+        "/Users/vinnieespo/Library/Application Support/Claude"
+      ]
+    },
+    "docker": {
+      "command": "uvx",
+      "args": ["mcp-server-docker"],
+      "env": {
+        "DOCKER_HOST": "unix:///var/run/docker.sock"
+      }
+    },
+    "desktop-commander": {
+      "command": "npx",
+      "args": ["@wonderwhy-er/desktop-commander@latest"]
+    },
+    "MCP Neovim Server": {
+      "command": "npx",
+      "args": ["-y", "mcp-neovim-server"],
+      "env": {
+        "ALLOW_SHELL_COMMANDS": "true",
+        "NVIM_SOCKET_PATH": "/tmp/nvim"
+      }
+    },
+    "github": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_TOKEN": "{{keychain:github-personal-token}}"
+      }
+    },
+    "chromadb": {
+      "command": "/Users/vinnieespo/.bun/bin/bun",
+      "args": [
+        "run",
+        "/Users/vinnieespo/Projects/VCPU/VinOrg2025/MCPServers/chromadb-context-mcp/index.js"
+      ],
+      "env": {
+        "CHROMA_URL": "http://localhost:8001",
+        "CHROMA_ROUTER_ENABLED": "true"
+      }
+    },
+    "vault": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "--network=host", "ashgw/vault-mcp"],
+      "env": {
+        "VAULT_ADDR": "http://localhost:8200",
+        "VAULT_TOKEN": "{{keychain:vault-root-token}}"
+      }
+    },
+    "redis": {
+      "command": "npx",
+      "args": ["redis-mcp-server"],
+      "env": {
+        "REDIS_URL": "redis://localhost:6379"
+      }
+    }
+  }
+}
