@@ -160,6 +160,12 @@ npm run lint
 npm run typecheck
 ```
 
+## AI and Agent Integration
+
+This project is designed for AI and agent-based automation:
+- [CLAUDE.md](CLAUDE.md) - Context and guidelines for AI assistants
+- [AI Agent Guide](docs/AI_AGENT_GUIDE.md) - Advanced patterns for autonomous agents
+
 ## Contributing
 
 Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to this project.

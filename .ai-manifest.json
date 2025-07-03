@@ -1,0 +1,120 @@
+{
+  "name": "brocade-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Brocade ICX switch automation via SSH",
+  "type": "mcp-server",
+  "transports": ["stdio", "sse"],
+  "capabilities": {
+    "tools": [
+      {
+        "name": "get_system_info",
+        "description": "Get system information from the Brocade switch",
+        "category": "monitoring"
+      },
+      {
+        "name": "get_vlans",
+        "description": "List all configured VLANs",
+        "category": "layer2"
+      },
+      {
+        "name": "get_interfaces",
+        "description": "Get all interfaces and their status",
+        "category": "monitoring"
+      },
+      {
+        "name": "get_mac_table",
+        "description": "View MAC address table",
+        "category": "layer2"
+      },
+      {
+        "name": "get_routing_table",
+        "description": "Display IP routing table",
+        "category": "layer3"
+      },
+      {
+        "name": "configure_vlan",
+        "description": "Create or modify VLAN settings",
+        "category": "configuration"
+      },
+      {
+        "name": "add_port_to_vlan",
+        "description": "Assign ports to VLANs (tagged/untagged)",
+        "category": "configuration"
+      },
+      {
+        "name": "configure_interface",
+        "description": "Configure interface settings",
+        "category": "configuration"
+      },
+      {
+        "name": "execute_command",
+        "description": "Execute raw CLI commands",
+        "category": "advanced"
+      },
+      {
+        "name": "monitor_interface",
+        "description": "Real-time interface statistics (SSE only)",
+        "category": "monitoring"
+      }
+    ],
+    "resources": [
+      "brocade://system/info",
+      "brocade://config/vlans",
+      "brocade://status/interfaces",
+      "brocade://status/mac-table",
+      "brocade://config/routes"
+    ]
+  },
+  "requirements": {
+    "runtime": "node",
+    "version": ">=18.0.0",
+    "dependencies": {
+      "ssh": "Required for switch communication",
+      "network": "SSH access to Brocade switches"
+    }
+  },
+  "configuration": {
+    "required": [
+      "BROCADE_HOST",
+      "BROCADE_USERNAME",
+      "BROCADE_PASSWORD"
+    ],
+    "optional": [
+      "BROCADE_PORT",
+      "SSH_TIMEOUT",
+      "SSH_KEEPALIVE_INTERVAL",
+      "SSE_PORT",
+      "LOG_LEVEL"
+    ]
+  },
+  "ai_integration": {
+    "llm_compatible": true,
+    "agent_frameworks": [
+      "langchain",
+      "autogen",
+      "crewai",
+      "superagi"
+    ],
+    "use_cases": [
+      "network_automation",
+      "configuration_management",
+      "monitoring",
+      "troubleshooting",
+      "compliance_checking"
+    ],
+    "context_files": [
+      "CLAUDE.md",
+      "docs/AI_AGENT_GUIDE.md"
+    ]
+  },
+  "security": {
+    "authentication": "ssh_password",
+    "encryption": "ssh",
+    "audit": "winston_logging"
+  },
+  "limitations": [
+    "No REST API support on ICX 6450",
+    "SSH-based communication only",
+    "CLI output parsing dependent on firmware version"
+  ]
+}
