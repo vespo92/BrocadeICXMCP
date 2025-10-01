@@ -18,10 +18,42 @@ MCP (Model Context Protocol) servers for automating Brocade ICX 6450 switch mana
 
 ## Architecture
 
-Since Brocade ICX 6450 switches don't support REST APIs, this MCP server uses SSH to execute CLI commands and parse the output. The server provides two transport modes:
+Built with **TypeScript** and the **MCP SDK 1.18.2**, this server follows modern patterns for AI agent integration. Since Brocade ICX 6450 switches don't support REST APIs, the server uses SSH to execute CLI commands and parse the output.
 
-1. **stdio**: For command-line integration with Claude Code
+### Transport Modes
+
+1. **stdio**: For command-line integration with Claude Code and other CLI-based MCP clients
 2. **SSE (Server-Sent Events)**: For web-based integration with real-time monitoring capabilities
+
+### Modular Design
+
+```
+src/
+├── core/              # Foundation libraries
+│   ├── config.ts      # Zod-validated configuration
+│   ├── errors.ts      # Custom error classes
+│   └── logger.ts      # Winston logging utilities
+├── lib/               # Core functionality
+│   ├── ssh-client.ts  # Connection pooling & auto-reconnect
+│   └── brocade-commands.ts # Command execution logic
+├── mcp/               # MCP protocol implementation
+│   ├── schemas.ts     # Zod schemas with JSON Schema generation
+│   ├── tools.ts       # Tool definitions
+│   ├── resources.ts   # Resource definitions
+│   └── handlers.ts    # Shared request handlers
+└── servers/           # Transport implementations
+    ├── stdio.ts       # CLI transport
+    └── sse.ts         # Web transport
+```
+
+### Key Features
+
+- **TypeScript-first**: Full type safety with strict mode enabled
+- **Schema validation**: Zod schemas automatically generate JSON schemas
+- **Connection pooling**: Robust SSH connection management with auto-reconnect
+- **Shared handlers**: Zero code duplication between transports
+- **Structured logging**: Winston with contextual error tracking
+- **Modern ESM**: Pure ES modules with NodeNext resolution
 
 ## Prerequisites
 
@@ -31,9 +63,29 @@ Since Brocade ICX 6450 switches don't support REST APIs, this MCP server uses SS
 
 ## Installation
 
+### Option 1: Direct from GitHub (Recommended)
+
+Using npx with MCP client:
 ```bash
+npx -y github:vespo92/BrocadeICXMCP
+```
+
+### Option 2: Clone and Build
+
+```bash
+git clone https://github.com/vespo92/BrocadeICXMCP.git
+cd BrocadeICXMCP
 npm install
 npm run build
+```
+
+### Option 3: GitHub Release
+
+Download the latest release tarball from [Releases](https://github.com/vespo92/BrocadeICXMCP/releases):
+```bash
+tar -xzf brocade-mcp-server-v1.0.0.tar.gz
+cd brocade-mcp-server
+npm install --production
 ```
 
 ## Configuration
@@ -93,14 +145,33 @@ The SSE server will start on port 3000 (configurable via `SSE_PORT`).
 
 ### With Claude Code
 
+#### Using npx (Recommended)
+
 Add to your `.mcp.json`:
+```json
+{
+  "mcpServers": {
+    "brocade": {
+      "command": "npx",
+      "args": ["-y", "github:vespo92/BrocadeICXMCP"],
+      "env": {
+        "BROCADE_HOST": "192.168.1.100",
+        "BROCADE_USERNAME": "admin",
+        "BROCADE_PASSWORD": "your_password"
+      }
+    }
+  }
+}
+```
+
+#### Using Local Clone
 
 ```json
 {
   "mcpServers": {
     "brocade": {
       "command": "node",
-      "args": ["path/to/dist/servers/stdio.js"],
+      "args": ["/absolute/path/to/BrocadeICXMCP/dist/servers/stdio.js"],
       "env": {
         "BROCADE_HOST": "192.168.1.100",
         "BROCADE_USERNAME": "admin",

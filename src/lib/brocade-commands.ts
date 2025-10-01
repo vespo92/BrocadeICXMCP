@@ -1,5 +1,5 @@
-import { BrocadeSSHClient } from './ssh-client';
-import { VlanInfo, InterfaceInfo, MacAddressEntry, RouteEntry, SystemInfo } from '../types';
+import { BrocadeSSHClient } from './ssh-client.js';
+import { VlanInfo, InterfaceInfo, MacAddressEntry, RouteEntry, SystemInfo } from '../types/index.js';
 
 export class BrocadeCommandExecutor {
   constructor(private sshClient: BrocadeSSHClient) {}
@@ -130,9 +130,9 @@ export class BrocadeCommandExecutor {
         const parts = line.trim().split(/\s+/);
         const route: RouteEntry = {
           destination: match[1],
-          gateway: parts.find(p => p.match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/) !== null) ?? '',
-          interface: parts.find(p => p.includes('e') || p.includes('ve')) ?? '',
-          metric: parseInt(parts.find(p => !isNaN(parseInt(p))) ?? '0'),
+          gateway: parts.find((p: string) => p.match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/) !== null) ?? '',
+          interface: parts.find((p: string) => p.includes('e') || p.includes('ve')) ?? '',
+          metric: parseInt(parts.find((p: string) => !isNaN(parseInt(p))) ?? '0'),
         };
         routes.push(route);
       }
@@ -189,6 +189,74 @@ export class BrocadeCommandExecutor {
 
   async saveConfiguration(): Promise<void> {
     await this.sshClient.executeCommand('write memory');
+  }
+
+  async saveConfig(): Promise<void> {
+    await this.saveConfiguration();
+  }
+
+  async getRunningConfig(): Promise<string> {
+    return await this.sshClient.executeCommand('show running-config');
+  }
+
+  async getStartupConfig(): Promise<string> {
+    return await this.sshClient.executeCommand('show configuration');
+  }
+
+  async getLogs(maxLines: number = 100): Promise<string> {
+    return await this.sshClient.executeCommand(`show logging | tail -${maxLines}`);
+  }
+
+  async getSpanningTree(): Promise<{ mode: string; instances: unknown[] }> {
+    const output = await this.sshClient.executeCommand('show spanning-tree');
+    // Parse spanning tree output
+    const lines = output.split('\n');
+    const result = {
+      mode: 'unknown',
+      instances: [] as unknown[],
+    };
+
+    for (const line of lines) {
+      if (line.includes('Spanning tree mode:')) {
+        result.mode = line.split(':')[1]?.trim().toLowerCase() || 'unknown';
+      }
+      // Additional parsing logic could be added here
+    }
+
+    return result;
+  }
+
+  async configureSpanningTree(mode: string, priority?: number): Promise<void> {
+    const commands = ['configure terminal'];
+
+    if (mode) {
+      commands.push(`spanning-tree mode ${mode}`);
+    }
+
+    if (priority !== undefined) {
+      commands.push(`spanning-tree priority ${priority}`);
+    }
+
+    commands.push('exit', 'write memory');
+    await this.sshClient.executeMultipleCommands(commands);
+  }
+
+  async configurePortSecurity(port: string, maxMacAddresses: number, violation: string): Promise<void> {
+    const commands = [
+      'configure terminal',
+      `interface ${port}`,
+      'port security',
+      `port security maximum ${maxMacAddresses}`,
+      `port security violation ${violation}`,
+      'exit',
+      'write memory',
+    ];
+
+    await this.sshClient.executeMultipleCommands(commands);
+  }
+
+  async executeCommand(command: string): Promise<string> {
+    return await this.sshClient.executeCommand(command);
   }
 
   async reloadSwitch(confirm: boolean = false): Promise<void> {

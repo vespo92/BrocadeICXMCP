@@ -5,6 +5,8 @@ export interface BrocadeConfig {
   password: string;
   timeout?: number;
   keepaliveInterval?: number;
+  maxRetries?: number;
+  retryDelay?: number;
 }
 
 export interface VlanInfo {
