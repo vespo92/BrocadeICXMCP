@@ -14,7 +14,7 @@ const JSON_SCHEMAS = generateToolJsonSchemas();
 interface ToolMetadata {
   name: ToolName;
   description: string;
-  category: 'info' | 'config' | 'vlan' | 'interface' | 'security' | 'maintenance';
+  category: 'info' | 'config' | 'vlan' | 'interface' | 'security' | 'maintenance' | 'lldp' | 'routing' | 'layer3' | 'acl' | 'stack' | 'monitoring' | 'diagnostics';
   requiresPrivilege?: boolean;
 }
 
@@ -90,6 +90,198 @@ const TOOLS_METADATA: ToolMetadata[] = [
     description: 'Execute a raw CLI command on the switch (use with caution)',
     category: 'maintenance',
     requiresPrivilege: true,
+  },
+
+  // LLDP tools
+  {
+    name: 'get_lldp_neighbors',
+    description: 'Get LLDP neighbors for network topology discovery',
+    category: 'lldp',
+  },
+  {
+    name: 'get_network_topology',
+    description: 'Get complete network topology based on LLDP data',
+    category: 'lldp',
+  },
+  {
+    name: 'configure_lldp',
+    description: 'Configure LLDP settings (enable/disable, timers)',
+    category: 'lldp',
+    requiresPrivilege: true,
+  },
+
+  // Layer 2-3 tools
+  {
+    name: 'get_arp_table',
+    description: 'Get ARP table showing IP to MAC address mappings',
+    category: 'layer3',
+  },
+  {
+    name: 'get_port_channels',
+    description: 'Get port channel (LAG) configurations and status',
+    category: 'interface',
+  },
+  {
+    name: 'get_layer3_interfaces',
+    description: 'Get Layer 3 interfaces (VEs) with IP configuration',
+    category: 'layer3',
+  },
+  {
+    name: 'configure_static_route',
+    description: 'Configure static routing entries',
+    category: 'routing',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'configure_port_channel',
+    description: 'Configure port channel (LAG) with LACP or static mode',
+    category: 'interface',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'configure_layer3_interface',
+    description: 'Configure Layer 3 interface (VE) with IP addressing',
+    category: 'layer3',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'configure_qos',
+    description: 'Configure Quality of Service (QoS) settings',
+    category: 'config',
+    requiresPrivilege: true,
+  },
+
+  // Routing protocol tools
+  {
+    name: 'get_bgp_neighbors',
+    description: 'Get BGP neighbor status and information',
+    category: 'routing',
+  },
+  {
+    name: 'get_ospf_neighbors',
+    description: 'Get OSPF neighbor status and information',
+    category: 'routing',
+  },
+  {
+    name: 'get_routing_protocol_status',
+    description: 'Get overall routing protocol status (BGP, OSPF)',
+    category: 'routing',
+  },
+
+  // ACL/Firewall tools
+  {
+    name: 'get_acls',
+    description: 'Get all configured Access Control Lists (ACLs)',
+    category: 'acl',
+  },
+  {
+    name: 'configure_acl',
+    description: 'Configure Access Control List for firewall integration',
+    category: 'acl',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'get_upstream_routing',
+    description: 'Get upstream routing information including default gateway, BGP/OSPF peers, and ACLs for firewall integration',
+    category: 'routing',
+  },
+
+  // Switch Stacking tools
+  {
+    name: 'get_stack_topology',
+    description: 'Get complete stack topology including all members, roles, and configuration',
+    category: 'stack',
+  },
+  {
+    name: 'get_stack_ports',
+    description: 'Get stack port status and connections',
+    category: 'stack',
+  },
+  {
+    name: 'get_stack_member',
+    description: 'Get detailed information about a specific stack member',
+    category: 'stack',
+  },
+  {
+    name: 'get_stack_health',
+    description: 'Get comprehensive stack health including redundancy and connectivity status',
+    category: 'stack',
+  },
+  {
+    name: 'configure_stack_priority',
+    description: 'Configure stack priority for master/backup election',
+    category: 'stack',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'configure_stack_ports',
+    description: 'Configure stack ports for inter-switch connectivity',
+    category: 'stack',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'renumber_stack_unit',
+    description: 'Renumber a stack unit ID',
+    category: 'stack',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'configure_stack',
+    description: 'Enable or disable stack functionality',
+    category: 'stack',
+    requiresPrivilege: true,
+  },
+
+  // Security Feature tools
+  {
+    name: 'configure_dhcp_snooping',
+    description: 'Configure DHCP snooping for VLAN security',
+    category: 'security',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'get_dhcp_bindings',
+    description: 'Get DHCP snooping binding database',
+    category: 'security',
+  },
+  {
+    name: 'configure_ip_source_guard',
+    description: 'Configure IP source guard to prevent IP spoofing',
+    category: 'security',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'configure_dynamic_arp_inspection',
+    description: 'Configure Dynamic ARP Inspection (DAI) to prevent ARP poisoning',
+    category: 'security',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'get_port_security_status',
+    description: 'Get detailed port security status and MAC address counts',
+    category: 'security',
+  },
+
+  // Advanced Monitoring tools
+  {
+    name: 'get_interface_statistics',
+    description: 'Get detailed interface statistics including packets, bytes, errors, and CRC',
+    category: 'monitoring',
+  },
+  {
+    name: 'get_system_health',
+    description: 'Get comprehensive system health including CPU, memory, temperature, fans, and power supplies',
+    category: 'monitoring',
+  },
+  {
+    name: 'run_cable_diagnostics',
+    description: 'Run cable diagnostics (TDR) to detect faults and cable length',
+    category: 'diagnostics',
+  },
+  {
+    name: 'get_optical_module_info',
+    description: 'Get SFP/SFP+ optical module information including temperature and power levels',
+    category: 'diagnostics',
   },
 ];
 
