@@ -14,7 +14,7 @@ const JSON_SCHEMAS = generateToolJsonSchemas();
 interface ToolMetadata {
   name: ToolName;
   description: string;
-  category: 'info' | 'config' | 'vlan' | 'interface' | 'security' | 'maintenance' | 'lldp' | 'routing' | 'layer3' | 'acl' | 'stack';
+  category: 'info' | 'config' | 'vlan' | 'interface' | 'security' | 'maintenance' | 'lldp' | 'routing' | 'layer3' | 'acl' | 'stack' | 'monitoring' | 'diagnostics';
   requiresPrivilege?: boolean;
 }
 
@@ -230,6 +230,58 @@ const TOOLS_METADATA: ToolMetadata[] = [
     description: 'Enable or disable stack functionality',
     category: 'stack',
     requiresPrivilege: true,
+  },
+
+  // Security Feature tools
+  {
+    name: 'configure_dhcp_snooping',
+    description: 'Configure DHCP snooping for VLAN security',
+    category: 'security',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'get_dhcp_bindings',
+    description: 'Get DHCP snooping binding database',
+    category: 'security',
+  },
+  {
+    name: 'configure_ip_source_guard',
+    description: 'Configure IP source guard to prevent IP spoofing',
+    category: 'security',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'configure_dynamic_arp_inspection',
+    description: 'Configure Dynamic ARP Inspection (DAI) to prevent ARP poisoning',
+    category: 'security',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'get_port_security_status',
+    description: 'Get detailed port security status and MAC address counts',
+    category: 'security',
+  },
+
+  // Advanced Monitoring tools
+  {
+    name: 'get_interface_statistics',
+    description: 'Get detailed interface statistics including packets, bytes, errors, and CRC',
+    category: 'monitoring',
+  },
+  {
+    name: 'get_system_health',
+    description: 'Get comprehensive system health including CPU, memory, temperature, fans, and power supplies',
+    category: 'monitoring',
+  },
+  {
+    name: 'run_cable_diagnostics',
+    description: 'Run cable diagnostics (TDR) to detect faults and cable length',
+    category: 'diagnostics',
+  },
+  {
+    name: 'get_optical_module_info',
+    description: 'Get SFP/SFP+ optical module information including temperature and power levels',
+    category: 'diagnostics',
   },
 ];
 

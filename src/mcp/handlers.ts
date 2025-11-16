@@ -427,6 +427,76 @@ async function executeToolHandler(
       break;
     }
 
+    // Security Feature tools
+    case 'configure_dhcp_snooping': {
+      const { vlan, enabled, trustPorts } = validatedArgs as { vlan: number; enabled: boolean; trustPorts?: string[] };
+      await commandExecutor.configureDHCPSnooping({ vlan, enabled, trustPorts });
+      result = `DHCP snooping ${enabled ? 'enabled' : 'disabled'} on VLAN ${vlan}${trustPorts && trustPorts.length > 0 ? ` with ${trustPorts.length} trusted ports` : ''}`;
+      break;
+    }
+
+    case 'get_dhcp_bindings': {
+      const bindings = await commandExecutor.getDHCPBindings();
+      result = JSON.stringify(bindings, null, 2);
+      break;
+    }
+
+    case 'configure_ip_source_guard': {
+      const { port, enabled, maxBindings } = validatedArgs as { port: string; enabled: boolean; maxBindings?: number };
+      await commandExecutor.configureIPSourceGuard({ port, enabled, maxBindings });
+      result = `IP source guard ${enabled ? 'enabled' : 'disabled'} on port ${port}`;
+      break;
+    }
+
+    case 'configure_dynamic_arp_inspection': {
+      const { vlan, enabled, trustPorts, validateSrcMac, validateDstMac, validateIp } = validatedArgs as { vlan: number; enabled: boolean; trustPorts?: string[]; validateSrcMac?: boolean; validateDstMac?: boolean; validateIp?: boolean };
+      await commandExecutor.configureDynamicARPInspection({
+        vlan,
+        enabled,
+        trustPorts,
+        validateSrcMac,
+        validateDstMac,
+        validateIp,
+      });
+      result = `Dynamic ARP Inspection ${enabled ? 'enabled' : 'disabled'} on VLAN ${vlan}`;
+      break;
+    }
+
+    case 'get_port_security_status': {
+      const { port } = validatedArgs as { port?: string };
+      const statuses = await commandExecutor.getPortSecurityStatus(port);
+      result = JSON.stringify(statuses, null, 2);
+      break;
+    }
+
+    // Advanced Monitoring tools
+    case 'get_interface_statistics': {
+      const { interfaceName } = validatedArgs as { interfaceName?: string };
+      const statistics = await commandExecutor.getInterfaceStatistics(interfaceName);
+      result = JSON.stringify(statistics, null, 2);
+      break;
+    }
+
+    case 'get_system_health': {
+      const health = await commandExecutor.getSystemHealth();
+      result = JSON.stringify(health, null, 2);
+      break;
+    }
+
+    case 'run_cable_diagnostics': {
+      const { port } = validatedArgs as { port: string };
+      const diagnostics = await commandExecutor.runCableDiagnostics(port);
+      result = JSON.stringify(diagnostics, null, 2);
+      break;
+    }
+
+    case 'get_optical_module_info': {
+      const { port } = validatedArgs as { port?: string };
+      const modules = await commandExecutor.getOpticalModuleInfo(port);
+      result = JSON.stringify(modules, null, 2);
+      break;
+    }
+
     default: {
       throw new ValidationError(`Tool ${toolName} is not implemented`);
     }

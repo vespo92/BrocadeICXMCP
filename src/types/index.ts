@@ -221,3 +221,111 @@ export interface StackConfiguration {
   };
   stackMac?: string;
 }
+
+// Security Features types
+export interface DHCPSnoopingConfig {
+  vlan: number;
+  enabled: boolean;
+  trustPorts?: string[];
+}
+
+export interface DHCPBinding {
+  macAddress: string;
+  ipAddress: string;
+  vlan: number;
+  interface: string;
+  leaseTime?: string;
+}
+
+export interface IPSourceGuardConfig {
+  port: string;
+  enabled: boolean;
+  maxBindings?: number;
+}
+
+export interface DynamicARPInspection {
+  vlan: number;
+  enabled: boolean;
+  trustPorts?: string[];
+  validateSrcMac?: boolean;
+  validateDstMac?: boolean;
+  validateIp?: boolean;
+}
+
+export interface PortSecurityStatus {
+  port: string;
+  enabled: boolean;
+  maxMacAddresses: number;
+  currentMacCount: number;
+  violationMode: 'shutdown' | 'restrict' | 'protect';
+  secureAddresses: string[];
+}
+
+// Advanced Monitoring types
+export interface InterfaceStatistics {
+  interface: string;
+  status: 'up' | 'down';
+  inputPackets: number;
+  outputPackets: number;
+  inputBytes: number;
+  outputBytes: number;
+  inputErrors: number;
+  outputErrors: number;
+  crcErrors: number;
+  collisions: number;
+  inputRate?: number;
+  outputRate?: number;
+  utilization?: number;
+}
+
+export interface SystemHealth {
+  cpu: {
+    current: number;
+    average5min?: number;
+    average1min?: number;
+  };
+  memory: {
+    total: number;
+    used: number;
+    free: number;
+    utilization: number;
+  };
+  temperature?: {
+    current: number;
+    threshold?: number;
+    status: 'normal' | 'warning' | 'critical';
+  };
+  fans?: {
+    id: string;
+    status: 'ok' | 'failed';
+    speed?: number;
+  }[];
+  powerSupplies?: {
+    id: string;
+    status: 'ok' | 'failed' | 'absent';
+    watts?: number;
+  }[];
+}
+
+export interface CableDiagnostics {
+  port: string;
+  status: 'ok' | 'open' | 'short' | 'impedance-mismatch';
+  pairs: {
+    pair: number;
+    status: 'ok' | 'open' | 'short';
+    length?: number;
+  }[];
+}
+
+export interface OpticalModuleInfo {
+  port: string;
+  present: boolean;
+  type?: string;
+  vendor?: string;
+  serialNumber?: string;
+  partNumber?: string;
+  temperature?: number;
+  voltage?: number;
+  txPower?: number;
+  rxPower?: number;
+}

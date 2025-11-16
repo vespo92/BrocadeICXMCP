@@ -140,6 +140,45 @@ export const ConfigureStackSchema = z.object({
   enabled: z.boolean().describe('Enable or disable stack'),
 });
 
+// Security Feature schemas
+export const ConfigureDHCPSnoopingSchema = z.object({
+  vlan: z.number().min(1).max(4094).describe('VLAN ID'),
+  enabled: z.boolean().describe('Enable or disable DHCP snooping'),
+  trustPorts: z.array(z.string()).optional().describe('Array of trusted port identifiers'),
+});
+
+export const ConfigureIPSourceGuardSchema = z.object({
+  port: z.string().describe('Port identifier'),
+  enabled: z.boolean().describe('Enable or disable IP source guard'),
+  maxBindings: z.number().min(1).max(10).optional().describe('Maximum IP bindings'),
+});
+
+export const ConfigureDynamicARPInspectionSchema = z.object({
+  vlan: z.number().min(1).max(4094).describe('VLAN ID'),
+  enabled: z.boolean().describe('Enable or disable DAI'),
+  trustPorts: z.array(z.string()).optional().describe('Array of trusted port identifiers'),
+  validateSrcMac: z.boolean().optional().describe('Validate source MAC address'),
+  validateDstMac: z.boolean().optional().describe('Validate destination MAC address'),
+  validateIp: z.boolean().optional().describe('Validate IP address'),
+});
+
+export const GetPortSecurityStatusSchema = z.object({
+  port: z.string().optional().describe('Optional specific port identifier'),
+});
+
+// Advanced Monitoring schemas
+export const GetInterfaceStatisticsSchema = z.object({
+  interfaceName: z.string().optional().describe('Optional specific interface name'),
+});
+
+export const RunCableDiagnosticsSchema = z.object({
+  port: z.string().describe('Port identifier for cable diagnostics'),
+});
+
+export const GetOpticalModuleInfoSchema = z.object({
+  port: z.string().optional().describe('Optional specific port identifier'),
+});
+
 // Type exports
 export type ConfigureVlanInput = z.infer<typeof ConfigureVlanSchema>;
 export type AddPortToVlanInput = z.infer<typeof AddPortToVlanSchema>;
@@ -163,6 +202,13 @@ export type ConfigureStackPriorityInput = z.infer<typeof ConfigureStackPriorityS
 export type ConfigureStackPortsInput = z.infer<typeof ConfigureStackPortsSchema>;
 export type RenumberStackUnitInput = z.infer<typeof RenumberStackUnitSchema>;
 export type ConfigureStackInput = z.infer<typeof ConfigureStackSchema>;
+export type ConfigureDHCPSnoopingInput = z.infer<typeof ConfigureDHCPSnoopingSchema>;
+export type ConfigureIPSourceGuardInput = z.infer<typeof ConfigureIPSourceGuardSchema>;
+export type ConfigureDynamicARPInspectionInput = z.infer<typeof ConfigureDynamicARPInspectionSchema>;
+export type GetPortSecurityStatusInput = z.infer<typeof GetPortSecurityStatusSchema>;
+export type GetInterfaceStatisticsInput = z.infer<typeof GetInterfaceStatisticsSchema>;
+export type RunCableDiagnosticsInput = z.infer<typeof RunCableDiagnosticsSchema>;
+export type GetOpticalModuleInfoInput = z.infer<typeof GetOpticalModuleInfoSchema>;
 
 // Schema map for easy access
 export const TOOL_SCHEMAS = {
@@ -214,6 +260,19 @@ export const TOOL_SCHEMAS = {
   configure_stack_ports: ConfigureStackPortsSchema,
   renumber_stack_unit: RenumberStackUnitSchema,
   configure_stack: ConfigureStackSchema,
+
+  // Security Feature tools
+  configure_dhcp_snooping: ConfigureDHCPSnoopingSchema,
+  get_dhcp_bindings: z.object({}),
+  configure_ip_source_guard: ConfigureIPSourceGuardSchema,
+  configure_dynamic_arp_inspection: ConfigureDynamicARPInspectionSchema,
+  get_port_security_status: GetPortSecurityStatusSchema,
+
+  // Advanced Monitoring tools
+  get_interface_statistics: GetInterfaceStatisticsSchema,
+  get_system_health: z.object({}),
+  run_cable_diagnostics: RunCableDiagnosticsSchema,
+  get_optical_module_info: GetOpticalModuleInfoSchema,
 } as const;
 
 // Export type for tool names

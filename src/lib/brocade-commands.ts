@@ -21,6 +21,15 @@ import {
   StackMember,
   StackPort,
   StackTopology,
+  DHCPSnoopingConfig,
+  DHCPBinding,
+  IPSourceGuardConfig,
+  DynamicARPInspection,
+  PortSecurityStatus,
+  InterfaceStatistics,
+  SystemHealth,
+  CableDiagnostics,
+  OpticalModuleInfo,
 } from '../types/index.js';
 
 export class BrocadeCommandExecutor {
@@ -1041,5 +1050,374 @@ export class BrocadeCommandExecutor {
         degradedLinks,
       },
     };
+  }
+
+  // ========== Security Features ==========
+
+  /**
+   * Configure DHCP snooping
+   */
+  async configureDHCPSnooping(config: DHCPSnoopingConfig): Promise<void> {
+    const commands = [
+      'configure terminal',
+      config.enabled ? 'ip dhcp snooping' : 'no ip dhcp snooping',
+      `ip dhcp snooping vlan ${config.vlan}`,
+    ];
+
+    if (config.trustPorts && config.trustPorts.length > 0) {
+      for (const port of config.trustPorts) {
+        commands.push(
+          `interface ethernet ${port}`,
+          'ip dhcp snooping trust',
+          'exit'
+        );
+      }
+    }
+
+    commands.push('exit', 'write memory');
+    await this.sshClient.executeMultipleCommands(commands);
+  }
+
+  /**
+   * Get DHCP snooping bindings
+   */
+  async getDHCPBindings(): Promise<DHCPBinding[]> {
+    const output = await this.sshClient.executeCommand('show ip dhcp snooping binding');
+    const bindings: DHCPBinding[] = [];
+
+    const lines = output.split('\n');
+    for (const line of lines) {
+      // Parse binding entries
+      const match = line.match(/([0-9a-fA-F:.]+)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(\d+)\s+(\S+)/);
+      if (match) {
+        bindings.push({
+          macAddress: match[1],
+          ipAddress: match[2],
+          vlan: parseInt(match[3]),
+          interface: match[4],
+        });
+      }
+    }
+
+    return bindings;
+  }
+
+  /**
+   * Configure IP Source Guard
+   */
+  async configureIPSourceGuard(config: IPSourceGuardConfig): Promise<void> {
+    const commands = [
+      'configure terminal',
+      `interface ethernet ${config.port}`,
+      config.enabled ? 'ip verify source' : 'no ip verify source',
+    ];
+
+    if (config.maxBindings !== undefined && config.enabled) {
+      commands.push(`ip verify source maximum ${config.maxBindings}`);
+    }
+
+    commands.push('exit', 'exit', 'write memory');
+    await this.sshClient.executeMultipleCommands(commands);
+  }
+
+  /**
+   * Configure Dynamic ARP Inspection
+   */
+  async configureDynamicARPInspection(config: DynamicARPInspection): Promise<void> {
+    const commands = [
+      'configure terminal',
+      config.enabled ? `ip arp inspection vlan ${config.vlan}` : `no ip arp inspection vlan ${config.vlan}`,
+    ];
+
+    if (config.enabled) {
+      if (config.validateSrcMac) {
+        commands.push('ip arp inspection validate src-mac');
+      }
+      if (config.validateDstMac) {
+        commands.push('ip arp inspection validate dst-mac');
+      }
+      if (config.validateIp) {
+        commands.push('ip arp inspection validate ip');
+      }
+
+      if (config.trustPorts && config.trustPorts.length > 0) {
+        for (const port of config.trustPorts) {
+          commands.push(
+            `interface ethernet ${port}`,
+            'ip arp inspection trust',
+            'exit'
+          );
+        }
+      }
+    }
+
+    commands.push('exit', 'write memory');
+    await this.sshClient.executeMultipleCommands(commands);
+  }
+
+  /**
+   * Get port security status
+   */
+  async getPortSecurityStatus(port?: string): Promise<PortSecurityStatus[]> {
+    const command = port ? `show port-security interface ethernet ${port}` : 'show port-security';
+    const output = await this.sshClient.executeCommand(command);
+    const statuses: PortSecurityStatus[] = [];
+
+    const lines = output.split('\n');
+    for (const line of lines) {
+      // Parse port security status
+      const match = line.match(/ethernet\s+([\d/]+)\s+(\w+)\s+(\d+)\s+(\d+)\s+(\w+)/i);
+      if (match) {
+        statuses.push({
+          port: match[1],
+          enabled: match[2].toLowerCase() === 'enabled',
+          maxMacAddresses: parseInt(match[3]),
+          currentMacCount: parseInt(match[4]),
+          violationMode: match[5].toLowerCase() as 'shutdown' | 'restrict' | 'protect',
+          secureAddresses: [],
+        });
+      }
+    }
+
+    return statuses;
+  }
+
+  // ========== Advanced Monitoring ==========
+
+  /**
+   * Get interface statistics
+   */
+  async getInterfaceStatistics(interfaceName?: string): Promise<InterfaceStatistics[]> {
+    const command = interfaceName
+      ? `show statistics ethernet ${interfaceName}`
+      : 'show statistics';
+    const output = await this.sshClient.executeCommand(command);
+    const stats: InterfaceStatistics[] = [];
+
+    const blocks = output.split(/(?=Port|Ethernet)/i);
+
+    for (const block of blocks) {
+      const lines = block.split('\n');
+      const stat: Partial<InterfaceStatistics> = {};
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+
+        // Parse interface name
+        if (trimmed.match(/^(?:Port|Ethernet)\s+([\d/]+)/i)) {
+          const match = trimmed.match(/^(?:Port|Ethernet)\s+([\d/]+)/i);
+          if (match) stat.interface = match[1];
+        }
+
+        // Parse statistics
+        if (trimmed.includes('InOctets')) {
+          const match = trimmed.match(/(\d+)/);
+          if (match) stat.inputBytes = parseInt(match[1]);
+        }
+        if (trimmed.includes('InPkts') || trimmed.includes('Input packets')) {
+          const match = trimmed.match(/(\d+)/);
+          if (match) stat.inputPackets = parseInt(match[1]);
+        }
+        if (trimmed.includes('OutOctets')) {
+          const match = trimmed.match(/(\d+)/);
+          if (match) stat.outputBytes = parseInt(match[1]);
+        }
+        if (trimmed.includes('OutPkts') || trimmed.includes('Output packets')) {
+          const match = trimmed.match(/(\d+)/);
+          if (match) stat.outputPackets = parseInt(match[1]);
+        }
+        if (trimmed.includes('InErrors') || trimmed.includes('Input errors')) {
+          const match = trimmed.match(/(\d+)/);
+          if (match) stat.inputErrors = parseInt(match[1]);
+        }
+        if (trimmed.includes('OutErrors') || trimmed.includes('Output errors')) {
+          const match = trimmed.match(/(\d+)/);
+          if (match) stat.outputErrors = parseInt(match[1]);
+        }
+        if (trimmed.includes('CRC')) {
+          const match = trimmed.match(/(\d+)/);
+          if (match) stat.crcErrors = parseInt(match[1]);
+        }
+        if (trimmed.includes('Collisions')) {
+          const match = trimmed.match(/(\d+)/);
+          if (match) stat.collisions = parseInt(match[1]);
+        }
+      }
+
+      if (stat.interface) {
+        stats.push({
+          interface: stat.interface,
+          status: 'up',
+          inputPackets: stat.inputPackets || 0,
+          outputPackets: stat.outputPackets || 0,
+          inputBytes: stat.inputBytes || 0,
+          outputBytes: stat.outputBytes || 0,
+          inputErrors: stat.inputErrors || 0,
+          outputErrors: stat.outputErrors || 0,
+          crcErrors: stat.crcErrors || 0,
+          collisions: stat.collisions || 0,
+        });
+      }
+    }
+
+    return stats;
+  }
+
+  /**
+   * Get system health
+   */
+  async getSystemHealth(): Promise<SystemHealth> {
+    const cpuOutput = await this.sshClient.executeCommand('show cpu');
+    const memOutput = await this.sshClient.executeCommand('show memory');
+
+    const health: SystemHealth = {
+      cpu: { current: 0 },
+      memory: { total: 0, used: 0, free: 0, utilization: 0 },
+    };
+
+    // Parse CPU
+    const cpuMatch = cpuOutput.match(/(\d+)%/);
+    if (cpuMatch) {
+      health.cpu.current = parseInt(cpuMatch[1]);
+    }
+
+    // Parse memory
+    const memLines = memOutput.split('\n');
+    for (const line of memLines) {
+      if (line.includes('Total')) {
+        const match = line.match(/(\d+)/);
+        if (match) health.memory.total = parseInt(match[1]);
+      }
+      if (line.includes('Used')) {
+        const match = line.match(/(\d+)/);
+        if (match) health.memory.used = parseInt(match[1]);
+      }
+      if (line.includes('Free')) {
+        const match = line.match(/(\d+)/);
+        if (match) health.memory.free = parseInt(match[1]);
+      }
+    }
+
+    if (health.memory.total > 0) {
+      health.memory.utilization = Math.round((health.memory.used / health.memory.total) * 100);
+    }
+
+    // Try to get temperature
+    try {
+      const tempOutput = await this.sshClient.executeCommand('show chassis');
+      const tempMatch = tempOutput.match(/Temperature:\s+(\d+)/i);
+      if (tempMatch) {
+        health.temperature = {
+          current: parseInt(tempMatch[1]),
+          status: parseInt(tempMatch[1]) > 70 ? 'warning' : 'normal',
+        };
+      }
+    } catch {
+      // Temperature monitoring may not be available
+    }
+
+    return health;
+  }
+
+  /**
+   * Run cable diagnostics
+   */
+  async runCableDiagnostics(port: string): Promise<CableDiagnostics> {
+    const output = await this.sshClient.executeCommand(`cable-diagnostics tdr interface ethernet ${port}`);
+
+    const diagnostic: CableDiagnostics = {
+      port,
+      status: 'ok',
+      pairs: [],
+    };
+
+    const lines = output.split('\n');
+    for (const line of lines) {
+      // Parse TDR results
+      if (line.includes('Pair')) {
+        const pairMatch = line.match(/Pair\s+(\d+):\s+(\w+)(?:\s+(\d+)\s*(?:m|meters)?)?/i);
+        if (pairMatch) {
+          diagnostic.pairs.push({
+            pair: parseInt(pairMatch[1]),
+            status: pairMatch[2].toLowerCase() as 'ok' | 'open' | 'short',
+            length: pairMatch[3] ? parseInt(pairMatch[3]) : undefined,
+          });
+
+          if (pairMatch[2].toLowerCase() !== 'ok') {
+            diagnostic.status = pairMatch[2].toLowerCase() as 'open' | 'short';
+          }
+        }
+      }
+    }
+
+    return diagnostic;
+  }
+
+  /**
+   * Get optical module information
+   */
+  async getOpticalModuleInfo(port?: string): Promise<OpticalModuleInfo[]> {
+    const command = port ? `show optical-monitor ethernet ${port}` : 'show optical-monitor';
+    const output = await this.sshClient.executeCommand(command);
+    const modules: OpticalModuleInfo[] = [];
+
+    const blocks = output.split(/(?=Port|Ethernet)/i);
+
+    for (const block of blocks) {
+      const lines = block.split('\n');
+      const module: Partial<OpticalModuleInfo> = {};
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+
+        if (trimmed.match(/^(?:Port|Ethernet)\s+([\d/]+)/i)) {
+          const match = trimmed.match(/^(?:Port|Ethernet)\s+([\d/]+)/i);
+          if (match) module.port = match[1];
+        }
+
+        if (trimmed.includes('Transceiver')) {
+          module.present = !trimmed.includes('Not Present');
+        }
+
+        if (trimmed.includes('Type:')) {
+          const match = trimmed.match(/Type:\s+(.+)/);
+          if (match) module.type = match[1].trim();
+        }
+
+        if (trimmed.includes('Vendor:')) {
+          const match = trimmed.match(/Vendor:\s+(.+)/);
+          if (match) module.vendor = match[1].trim();
+        }
+
+        if (trimmed.includes('Temperature')) {
+          const match = trimmed.match(/([-\d.]+)\s*C/);
+          if (match) module.temperature = parseFloat(match[1]);
+        }
+
+        if (trimmed.includes('TX Power') || trimmed.includes('Tx power')) {
+          const match = trimmed.match(/([-\d.]+)\s*dBm/);
+          if (match) module.txPower = parseFloat(match[1]);
+        }
+
+        if (trimmed.includes('RX Power') || trimmed.includes('Rx power')) {
+          const match = trimmed.match(/([-\d.]+)\s*dBm/);
+          if (match) module.rxPower = parseFloat(match[1]);
+        }
+      }
+
+      if (module.port) {
+        modules.push({
+          port: module.port,
+          present: module.present ?? false,
+          type: module.type,
+          vendor: module.vendor,
+          temperature: module.temperature,
+          txPower: module.txPower,
+          rxPower: module.rxPower,
+        });
+      }
+    }
+
+    return modules;
   }
 }
