@@ -14,7 +14,7 @@ const JSON_SCHEMAS = generateToolJsonSchemas();
 interface ToolMetadata {
   name: ToolName;
   description: string;
-  category: 'info' | 'config' | 'vlan' | 'interface' | 'security' | 'maintenance';
+  category: 'info' | 'config' | 'vlan' | 'interface' | 'security' | 'maintenance' | 'lldp' | 'routing' | 'layer3' | 'acl';
   requiresPrivilege?: boolean;
 }
 
@@ -90,6 +90,100 @@ const TOOLS_METADATA: ToolMetadata[] = [
     description: 'Execute a raw CLI command on the switch (use with caution)',
     category: 'maintenance',
     requiresPrivilege: true,
+  },
+
+  // LLDP tools
+  {
+    name: 'get_lldp_neighbors',
+    description: 'Get LLDP neighbors for network topology discovery',
+    category: 'lldp',
+  },
+  {
+    name: 'get_network_topology',
+    description: 'Get complete network topology based on LLDP data',
+    category: 'lldp',
+  },
+  {
+    name: 'configure_lldp',
+    description: 'Configure LLDP settings (enable/disable, timers)',
+    category: 'lldp',
+    requiresPrivilege: true,
+  },
+
+  // Layer 2-3 tools
+  {
+    name: 'get_arp_table',
+    description: 'Get ARP table showing IP to MAC address mappings',
+    category: 'layer3',
+  },
+  {
+    name: 'get_port_channels',
+    description: 'Get port channel (LAG) configurations and status',
+    category: 'interface',
+  },
+  {
+    name: 'get_layer3_interfaces',
+    description: 'Get Layer 3 interfaces (VEs) with IP configuration',
+    category: 'layer3',
+  },
+  {
+    name: 'configure_static_route',
+    description: 'Configure static routing entries',
+    category: 'routing',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'configure_port_channel',
+    description: 'Configure port channel (LAG) with LACP or static mode',
+    category: 'interface',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'configure_layer3_interface',
+    description: 'Configure Layer 3 interface (VE) with IP addressing',
+    category: 'layer3',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'configure_qos',
+    description: 'Configure Quality of Service (QoS) settings',
+    category: 'config',
+    requiresPrivilege: true,
+  },
+
+  // Routing protocol tools
+  {
+    name: 'get_bgp_neighbors',
+    description: 'Get BGP neighbor status and information',
+    category: 'routing',
+  },
+  {
+    name: 'get_ospf_neighbors',
+    description: 'Get OSPF neighbor status and information',
+    category: 'routing',
+  },
+  {
+    name: 'get_routing_protocol_status',
+    description: 'Get overall routing protocol status (BGP, OSPF)',
+    category: 'routing',
+  },
+
+  // ACL/Firewall tools
+  {
+    name: 'get_acls',
+    description: 'Get all configured Access Control Lists (ACLs)',
+    category: 'acl',
+  },
+  {
+    name: 'configure_acl',
+    description: 'Configure Access Control List for firewall integration',
+    category: 'acl',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'get_upstream_routing',
+    description: 'Get upstream routing information including default gateway, BGP/OSPF peers, and ACLs for firewall integration',
+    category: 'routing',
   },
 ];
 

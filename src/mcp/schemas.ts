@@ -58,6 +58,63 @@ export const ConfigurePortSecuritySchema = z.object({
   violation: z.enum(['shutdown', 'restrict', 'protect']).describe('Action on violation'),
 });
 
+// LLDP schemas
+export const ConfigureLLDPSchema = z.object({
+  enabled: z.boolean().optional().describe('Enable or disable LLDP'),
+  transmitInterval: z.number().min(5).max(32768).optional().describe('LLDP transmit interval in seconds'),
+  holdMultiplier: z.number().min(2).max(10).optional().describe('LLDP hold time multiplier'),
+});
+
+// Layer 2-3 schemas
+export const ConfigureStaticRouteSchema = z.object({
+  destination: z.string().describe('Destination network (e.g., "192.168.1.0")'),
+  netmask: z.string().describe('Network mask (e.g., "255.255.255.0")'),
+  gateway: z.string().describe('Gateway IP address'),
+  distance: z.number().min(1).max(255).optional().describe('Administrative distance'),
+  interface: z.string().optional().describe('Exit interface'),
+});
+
+export const ConfigurePortChannelSchema = z.object({
+  id: z.number().min(1).max(256).describe('Port channel ID'),
+  ports: z.array(z.string()).describe('Array of port identifiers to include in the channel'),
+  type: z.enum(['static', 'lacp']).optional().describe('Port channel type'),
+  name: z.string().optional().describe('Port channel name'),
+});
+
+export const ConfigureLayer3InterfaceSchema = z.object({
+  vlan: z.number().min(1).max(4094).describe('VLAN ID for the Layer 3 interface'),
+  ipAddress: z.string().describe('IP address'),
+  subnet: z.string().describe('Subnet mask in CIDR notation (e.g., "24")'),
+  description: z.string().optional().describe('Interface description'),
+});
+
+export const ConfigureQoSSchema = z.object({
+  name: z.string().describe('QoS profile name'),
+  priority: z.number().min(0).max(7).optional().describe('Priority level (0-7)'),
+  dscp: z.number().min(0).max(63).optional().describe('DSCP value (0-63)'),
+  cos: z.number().min(0).max(7).optional().describe('Class of Service value (0-7)'),
+  queueId: z.number().min(0).max(7).optional().describe('Queue ID (0-7)'),
+});
+
+// ACL/Firewall schemas
+export const ACLRuleSchema = z.object({
+  action: z.enum(['permit', 'deny']).describe('Action to take'),
+  protocol: z.string().describe('Protocol (ip, tcp, udp, icmp, etc.)'),
+  sourceIp: z.string().optional().describe('Source IP address'),
+  sourceWildcard: z.string().optional().describe('Source wildcard mask'),
+  destIp: z.string().optional().describe('Destination IP address'),
+  destWildcard: z.string().optional().describe('Destination wildcard mask'),
+  sourcePort: z.string().optional().describe('Source port or range'),
+  destPort: z.string().optional().describe('Destination port or range'),
+  description: z.string().optional().describe('Rule description'),
+});
+
+export const ConfigureACLSchema = z.object({
+  name: z.string().describe('ACL name'),
+  type: z.enum(['standard', 'extended']).describe('ACL type'),
+  rules: z.array(ACLRuleSchema).describe('Array of ACL rules'),
+});
+
 // Type exports
 export type ConfigureVlanInput = z.infer<typeof ConfigureVlanSchema>;
 export type AddPortToVlanInput = z.infer<typeof AddPortToVlanSchema>;
@@ -69,9 +126,17 @@ export type GetVlanInput = z.infer<typeof GetVlanSchema>;
 export type ConfigureSpanningTreeInput = z.infer<typeof ConfigureSpanningTreeSchema>;
 export type BackupConfigInput = z.infer<typeof BackupConfigSchema>;
 export type ConfigurePortSecurityInput = z.infer<typeof ConfigurePortSecuritySchema>;
+export type ConfigureLLDPInput = z.infer<typeof ConfigureLLDPSchema>;
+export type ConfigureStaticRouteInput = z.infer<typeof ConfigureStaticRouteSchema>;
+export type ConfigurePortChannelInput = z.infer<typeof ConfigurePortChannelSchema>;
+export type ConfigureLayer3InterfaceInput = z.infer<typeof ConfigureLayer3InterfaceSchema>;
+export type ConfigureQoSInput = z.infer<typeof ConfigureQoSSchema>;
+export type ACLRuleInput = z.infer<typeof ACLRuleSchema>;
+export type ConfigureACLInput = z.infer<typeof ConfigureACLSchema>;
 
 // Schema map for easy access
 export const TOOL_SCHEMAS = {
+  // Existing tools
   configure_vlan: ConfigureVlanSchema,
   add_port_to_vlan: AddPortToVlanSchema,
   configure_interface: ConfigureInterfaceSchema,
@@ -85,6 +150,30 @@ export const TOOL_SCHEMAS = {
   backup_config: BackupConfigSchema,
   save_config: z.object({}),
   configure_port_security: ConfigurePortSecuritySchema,
+
+  // LLDP tools
+  get_lldp_neighbors: z.object({}),
+  get_network_topology: z.object({}),
+  configure_lldp: ConfigureLLDPSchema,
+
+  // Layer 2-3 tools
+  get_arp_table: z.object({}),
+  get_port_channels: z.object({}),
+  get_layer3_interfaces: z.object({}),
+  configure_static_route: ConfigureStaticRouteSchema,
+  configure_port_channel: ConfigurePortChannelSchema,
+  configure_layer3_interface: ConfigureLayer3InterfaceSchema,
+  configure_qos: ConfigureQoSSchema,
+
+  // Routing protocol tools
+  get_bgp_neighbors: z.object({}),
+  get_ospf_neighbors: z.object({}),
+  get_routing_protocol_status: z.object({}),
+
+  // ACL/Firewall tools
+  get_acls: z.object({}),
+  configure_acl: ConfigureACLSchema,
+  get_upstream_routing: z.object({}),
 } as const;
 
 // Export type for tool names

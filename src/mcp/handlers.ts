@@ -246,6 +246,129 @@ async function executeToolHandler(
       break;
     }
 
+    // LLDP tools
+    case 'get_lldp_neighbors': {
+      const neighbors = await commandExecutor.getLLDPNeighbors();
+      result = JSON.stringify(neighbors, null, 2);
+      break;
+    }
+
+    case 'get_network_topology': {
+      const topology = await commandExecutor.getNetworkTopology();
+      result = JSON.stringify(topology, null, 2);
+      break;
+    }
+
+    case 'configure_lldp': {
+      const { enabled, transmitInterval, holdMultiplier } = validatedArgs as { enabled?: boolean; transmitInterval?: number; holdMultiplier?: number };
+      await commandExecutor.configureLLDP({ enabled, transmitInterval, holdMultiplier });
+      result = 'LLDP configuration updated successfully';
+      break;
+    }
+
+    // Layer 2-3 tools
+    case 'get_arp_table': {
+      const arpTable = await commandExecutor.getArpTable();
+      result = JSON.stringify(arpTable, null, 2);
+      break;
+    }
+
+    case 'get_port_channels': {
+      const portChannels = await commandExecutor.getPortChannels();
+      result = JSON.stringify(portChannels, null, 2);
+      break;
+    }
+
+    case 'get_layer3_interfaces': {
+      const layer3Interfaces = await commandExecutor.getLayer3Interfaces();
+      result = JSON.stringify(layer3Interfaces, null, 2);
+      break;
+    }
+
+    case 'configure_static_route': {
+      const { destination, netmask, gateway, distance, interface: iface } = validatedArgs as { destination: string; netmask: string; gateway: string; distance?: number; interface?: string };
+      await commandExecutor.configureStaticRoute({
+        destination,
+        netmask,
+        gateway,
+        distance,
+        interface: iface,
+      });
+      result = `Static route configured: ${destination}/${netmask} via ${gateway}`;
+      break;
+    }
+
+    case 'configure_port_channel': {
+      const { id, ports, type, name } = validatedArgs as { id: number; ports: string[]; type?: 'static' | 'lacp'; name?: string };
+      await commandExecutor.configurePortChannel({ id, ports, type, name });
+      result = `Port channel ${id} configured with ${ports.length} port(s)`;
+      break;
+    }
+
+    case 'configure_layer3_interface': {
+      const { vlan, ipAddress, subnet, description } = validatedArgs as { vlan: number; ipAddress: string; subnet: string; description?: string };
+      await commandExecutor.configureLayer3Interface({
+        vlan,
+        ipAddress,
+        subnet,
+        description,
+      });
+      result = `Layer 3 interface VE ${vlan} configured with IP ${ipAddress}/${subnet}`;
+      break;
+    }
+
+    case 'configure_qos': {
+      const { name, priority, dscp, cos, queueId } = validatedArgs as { name: string; priority?: number; dscp?: number; cos?: number; queueId?: number };
+      await commandExecutor.configureQoS({
+        name,
+        priority,
+        dscp,
+        cos,
+        queueId,
+      });
+      result = `QoS profile "${name}" configured successfully`;
+      break;
+    }
+
+    // Routing protocol tools
+    case 'get_bgp_neighbors': {
+      const bgpNeighbors = await commandExecutor.getBGPNeighbors();
+      result = JSON.stringify(bgpNeighbors, null, 2);
+      break;
+    }
+
+    case 'get_ospf_neighbors': {
+      const ospfNeighbors = await commandExecutor.getOSPFNeighbors();
+      result = JSON.stringify(ospfNeighbors, null, 2);
+      break;
+    }
+
+    case 'get_routing_protocol_status': {
+      const protocolStatus = await commandExecutor.getRoutingProtocolStatus();
+      result = JSON.stringify(protocolStatus, null, 2);
+      break;
+    }
+
+    // ACL/Firewall tools
+    case 'get_acls': {
+      const acls = await commandExecutor.getACLs();
+      result = JSON.stringify(acls, null, 2);
+      break;
+    }
+
+    case 'configure_acl': {
+      const { name, type, rules } = validatedArgs as { name: string; type: 'standard' | 'extended'; rules: Array<{ action: 'permit' | 'deny'; protocol: string; sourceIp?: string; sourceWildcard?: string; destIp?: string; destWildcard?: string; sourcePort?: string; destPort?: string; description?: string }> };
+      await commandExecutor.configureACL({ name, type, rules });
+      result = `ACL "${name}" configured with ${rules.length} rule(s)`;
+      break;
+    }
+
+    case 'get_upstream_routing': {
+      const upstreamRouting = await commandExecutor.getUpstreamRouting();
+      result = JSON.stringify(upstreamRouting, null, 2);
+      break;
+    }
+
     default: {
       throw new ValidationError(`Tool ${toolName} is not implemented`);
     }

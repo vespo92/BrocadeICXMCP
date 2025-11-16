@@ -1,5 +1,24 @@
 import { BrocadeSSHClient } from './ssh-client.js';
-import { VlanInfo, InterfaceInfo, MacAddressEntry, RouteEntry, SystemInfo } from '../types/index.js';
+import {
+  VlanInfo,
+  InterfaceInfo,
+  MacAddressEntry,
+  RouteEntry,
+  SystemInfo,
+  LLDPNeighbor,
+  NetworkTopology,
+  ArpEntry,
+  PortChannel,
+  Layer3Interface,
+  StaticRoute,
+  QoSProfile,
+  BGPNeighbor,
+  OSPFNeighbor,
+  RoutingProtocolStatus,
+  ACL,
+  ACLRule,
+  UpstreamRouting,
+} from '../types/index.js';
 
 export class BrocadeCommandExecutor {
   constructor(private sshClient: BrocadeSSHClient) {}
@@ -263,5 +282,532 @@ export class BrocadeCommandExecutor {
     if (confirm) {
       await this.sshClient.executeCommand('reload');
     }
+  }
+
+  // ========== LLDP Management ==========
+
+  /**
+   * Get LLDP neighbors
+   */
+  async getLLDPNeighbors(): Promise<LLDPNeighbor[]> {
+    const output = await this.sshClient.executeCommand('show lldp neighbors detail');
+    const neighbors: LLDPNeighbor[] = [];
+
+    const blocks = output.split('Local port:').slice(1);
+
+    for (const block of blocks) {
+      const lines = block.split('\n');
+      const neighbor: Partial<LLDPNeighbor> = {};
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+
+        if (trimmed.startsWith('Local port:') || line.includes('Local port:')) {
+          neighbor.localPort = trimmed.split(':')[1]?.trim() || lines[0]?.trim() || '';
+        } else if (trimmed.includes('Chassis ID:')) {
+          neighbor.chassisId = trimmed.split(':')[1]?.trim() || '';
+        } else if (trimmed.includes('Port ID:')) {
+          neighbor.portId = trimmed.split(':')[1]?.trim() || '';
+        } else if (trimmed.includes('System Name:')) {
+          neighbor.systemName = trimmed.split(':')[1]?.trim() || '';
+        } else if (trimmed.includes('System Description:')) {
+          neighbor.systemDescription = trimmed.split(':')[1]?.trim() || '';
+        } else if (trimmed.includes('Port Description:')) {
+          neighbor.portDescription = trimmed.split(':')[1]?.trim() || '';
+        } else if (trimmed.includes('Management Address:')) {
+          neighbor.managementAddress = trimmed.split(':')[1]?.trim() || '';
+        } else if (trimmed.includes('Capabilities:')) {
+          const caps = trimmed.split(':')[1]?.trim() || '';
+          neighbor.capabilities = caps.split(',').map(c => c.trim());
+        }
+      }
+
+      if (neighbor.localPort && neighbor.chassisId && neighbor.portId) {
+        neighbors.push(neighbor as LLDPNeighbor);
+      }
+    }
+
+    return neighbors;
+  }
+
+  /**
+   * Get network topology from LLDP data
+   */
+  async getNetworkTopology(): Promise<NetworkTopology> {
+    const neighbors = await this.getLLDPNeighbors();
+    const systemInfo = await this.getSystemInfo();
+
+    const topology: NetworkTopology = {
+      switches: {},
+      connections: [],
+    };
+
+    // Add local switch
+    topology.switches['local'] = {
+      name: systemInfo.hostname,
+      description: `${systemInfo.model} - ${systemInfo.firmwareVersion}`,
+    };
+
+    // Add neighbors and connections
+    for (const neighbor of neighbors) {
+      topology.switches[neighbor.chassisId] = {
+        name: neighbor.systemName,
+        description: neighbor.systemDescription,
+        managementIp: neighbor.managementAddress,
+      };
+
+      topology.connections.push({
+        localSwitch: 'local',
+        localPort: neighbor.localPort,
+        remoteSwitch: neighbor.chassisId,
+        remotePort: neighbor.portId,
+      });
+    }
+
+    return topology;
+  }
+
+  /**
+   * Configure LLDP settings
+   */
+  async configureLLDP(config: {
+    enabled?: boolean;
+    transmitInterval?: number;
+    holdMultiplier?: number;
+  }): Promise<void> {
+    const commands = ['configure terminal'];
+
+    if (config.enabled !== undefined) {
+      commands.push(config.enabled ? 'lldp run' : 'no lldp run');
+    }
+
+    if (config.transmitInterval !== undefined) {
+      commands.push(`lldp timer ${config.transmitInterval}`);
+    }
+
+    if (config.holdMultiplier !== undefined) {
+      commands.push(`lldp holdtime-multiplier ${config.holdMultiplier}`);
+    }
+
+    commands.push('exit', 'write memory');
+    await this.sshClient.executeMultipleCommands(commands);
+  }
+
+  // ========== Layer 2-3 Management ==========
+
+  /**
+   * Get ARP table
+   */
+  async getArpTable(): Promise<ArpEntry[]> {
+    const output = await this.sshClient.executeCommand('show arp');
+    const entries: ArpEntry[] = [];
+
+    const lines = output.split('\n');
+    for (const line of lines) {
+      // Match IP and MAC address patterns
+      const ipMatch = line.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+      const macMatch = line.match(/([0-9a-fA-F]{4}\.[0-9a-fA-F]{4}\.[0-9a-fA-F]{4})/);
+
+      if (ipMatch && macMatch) {
+        const parts = line.trim().split(/\s+/);
+        const entry: ArpEntry = {
+          ipAddress: ipMatch[1],
+          macAddress: macMatch[1],
+          interface: parts.find(p => p.includes('ethernet') || p.includes('ve')) || 'unknown',
+          age: parts.find(p => p.includes(':') || p.match(/\d+/)) || undefined,
+          type: line.toLowerCase().includes('static') ? 'static' : 'dynamic',
+        };
+        entries.push(entry);
+      }
+    }
+
+    return entries;
+  }
+
+  /**
+   * Get port channels (LAG)
+   */
+  async getPortChannels(): Promise<PortChannel[]> {
+    const output = await this.sshClient.executeCommand('show lag');
+    const channels: PortChannel[] = [];
+
+    const lines = output.split('\n');
+    let currentChannel: Partial<PortChannel> | null = null;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // Match port-channel ID
+      const lagMatch = trimmed.match(/LAG\s+(\d+)/i) || trimmed.match(/Port-channel\s+(\d+)/i);
+      if (lagMatch) {
+        if (currentChannel && currentChannel.id !== undefined) {
+          channels.push(currentChannel as PortChannel);
+        }
+
+        currentChannel = {
+          id: parseInt(lagMatch[1]),
+          ports: [],
+          status: trimmed.toLowerCase().includes('up') ? 'up' : 'down',
+          type: trimmed.toLowerCase().includes('lacp') ? 'lacp' : 'static',
+        };
+      }
+
+      // Match member ports
+      if (currentChannel && trimmed.match(/ethernet\s+[\d/]+/i)) {
+        const portMatch = trimmed.match(/ethernet\s+([\d/]+)/i);
+        if (portMatch) {
+          currentChannel.ports?.push(portMatch[1]);
+        }
+      }
+    }
+
+    if (currentChannel && currentChannel.id !== undefined) {
+      channels.push(currentChannel as PortChannel);
+    }
+
+    return channels;
+  }
+
+  /**
+   * Get Layer 3 interfaces (VEs)
+   */
+  async getLayer3Interfaces(): Promise<Layer3Interface[]> {
+    const output = await this.sshClient.executeCommand('show ip interface');
+    const interfaces: Layer3Interface[] = [];
+
+    const lines = output.split('\n');
+
+    for (const line of lines) {
+      const veMatch = line.match(/ve\s+(\d+)/i);
+      const ipMatch = line.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/(\d{1,2})/);
+
+      if (veMatch) {
+        const iface: Layer3Interface = {
+          name: `ve${veMatch[1]}`,
+          vlan: parseInt(veMatch[1]),
+          status: line.toLowerCase().includes('up') ? 'up' : 'down',
+        };
+
+        if (ipMatch) {
+          iface.ipAddress = ipMatch[1];
+          iface.subnet = ipMatch[2];
+        }
+
+        interfaces.push(iface);
+      }
+    }
+
+    return interfaces;
+  }
+
+  /**
+   * Configure static route
+   */
+  async configureStaticRoute(route: StaticRoute): Promise<void> {
+    const commands = ['configure terminal'];
+
+    let routeCmd = `ip route ${route.destination} ${route.netmask} ${route.gateway}`;
+
+    if (route.distance !== undefined) {
+      routeCmd += ` ${route.distance}`;
+    }
+
+    commands.push(routeCmd, 'exit', 'write memory');
+    await this.sshClient.executeMultipleCommands(commands);
+  }
+
+  /**
+   * Configure port channel (LAG)
+   */
+  async configurePortChannel(config: {
+    id: number;
+    ports: string[];
+    type?: 'static' | 'lacp';
+    name?: string;
+  }): Promise<void> {
+    const commands = ['configure terminal'];
+
+    // Create LAG
+    commands.push(`lag ${config.id} ${config.type || 'static'}`);
+
+    if (config.name) {
+      commands.push(`port-name ${config.name}`);
+    }
+
+    // Add ports to LAG
+    for (const port of config.ports) {
+      commands.push(`ports ethernet ${port}`);
+    }
+
+    commands.push('exit', 'write memory');
+    await this.sshClient.executeMultipleCommands(commands);
+  }
+
+  /**
+   * Configure Layer 3 interface
+   */
+  async configureLayer3Interface(config: {
+    vlan: number;
+    ipAddress: string;
+    subnet: string;
+    description?: string;
+  }): Promise<void> {
+    const commands = [
+      'configure terminal',
+      `interface ve ${config.vlan}`,
+    ];
+
+    if (config.description) {
+      commands.push(`port-name ${config.description}`);
+    }
+
+    commands.push(
+      `ip address ${config.ipAddress}/${config.subnet}`,
+      'exit',
+      'write memory'
+    );
+
+    await this.sshClient.executeMultipleCommands(commands);
+  }
+
+  /**
+   * Configure QoS profile
+   */
+  async configureQoS(config: QoSProfile): Promise<void> {
+    const commands = ['configure terminal'];
+
+    if (config.priority !== undefined) {
+      commands.push(`qos priority ${config.priority}`);
+    }
+
+    if (config.dscp !== undefined) {
+      commands.push(`qos dscp ${config.dscp}`);
+    }
+
+    commands.push('exit', 'write memory');
+    await this.sshClient.executeMultipleCommands(commands);
+  }
+
+  // ========== Routing Protocol Management ==========
+
+  /**
+   * Get BGP neighbors
+   */
+  async getBGPNeighbors(): Promise<BGPNeighbor[]> {
+    const output = await this.sshClient.executeCommand('show ip bgp neighbors');
+    const neighbors: BGPNeighbor[] = [];
+
+    const blocks = output.split('BGP neighbor is').slice(1);
+
+    for (const block of blocks) {
+      const lines = block.split('\n');
+      const neighbor: Partial<BGPNeighbor> = {};
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+
+        // First line usually has the address
+        if (!neighbor.address && trimmed.match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/)) {
+          const match = trimmed.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+          if (match) neighbor.address = match[1];
+        }
+
+        if (trimmed.includes('remote AS')) {
+          const asnMatch = trimmed.match(/remote AS (\d+)/i);
+          if (asnMatch) neighbor.asn = parseInt(asnMatch[1]);
+        }
+
+        if (trimmed.includes('BGP state')) {
+          const stateMatch = trimmed.match(/BGP state = (\w+)/i);
+          if (stateMatch) neighbor.state = stateMatch[1];
+        }
+      }
+
+      if (neighbor.address && neighbor.asn) {
+        neighbors.push({
+          address: neighbor.address,
+          asn: neighbor.asn,
+          state: neighbor.state || 'unknown',
+        });
+      }
+    }
+
+    return neighbors;
+  }
+
+  /**
+   * Get OSPF neighbors
+   */
+  async getOSPFNeighbors(): Promise<OSPFNeighbor[]> {
+    const output = await this.sshClient.executeCommand('show ip ospf neighbor');
+    const neighbors: OSPFNeighbor[] = [];
+
+    const lines = output.split('\n');
+
+    for (const line of lines) {
+      const match = line.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(\d+)\s+(\w+)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+([\w/]+)/);
+
+      if (match) {
+        neighbors.push({
+          routerId: match[1],
+          priority: parseInt(match[2]),
+          state: match[3],
+          address: match[4],
+          interface: match[5],
+        });
+      }
+    }
+
+    return neighbors;
+  }
+
+  /**
+   * Get routing protocol status
+   */
+  async getRoutingProtocolStatus(): Promise<RoutingProtocolStatus> {
+    const status: RoutingProtocolStatus = {};
+
+    try {
+      const bgpNeighbors = await this.getBGPNeighbors();
+      if (bgpNeighbors.length > 0) {
+        status.bgp = {
+          enabled: true,
+          neighbors: bgpNeighbors,
+        };
+      }
+    } catch {
+      // BGP not configured
+    }
+
+    try {
+      const ospfNeighbors = await this.getOSPFNeighbors();
+      if (ospfNeighbors.length > 0) {
+        status.ospf = {
+          enabled: true,
+          areas: [],
+          neighbors: ospfNeighbors,
+        };
+      }
+    } catch {
+      // OSPF not configured
+    }
+
+    return status;
+  }
+
+  // ========== ACL/Firewall Management ==========
+
+  /**
+   * Get ACL configuration
+   */
+  async getACLs(): Promise<ACL[]> {
+    const output = await this.sshClient.executeCommand('show access-list');
+    const acls: ACL[] = [];
+
+    const blocks = output.split(/(?=(?:Standard|Extended) IP access list)/i);
+
+    for (const block of blocks) {
+      if (!block.trim()) continue;
+
+      const lines = block.split('\n');
+      const firstLine = lines[0];
+
+      const aclMatch = firstLine.match(/(Standard|Extended) IP access list (\S+)/i);
+      if (!aclMatch) continue;
+
+      const acl: ACL = {
+        name: aclMatch[2],
+        type: aclMatch[1].toLowerCase() === 'standard' ? 'standard' : 'extended',
+        rules: [],
+      };
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const seqMatch = line.match(/^(\d+)\s+(permit|deny)\s+(.+)/i);
+        if (seqMatch) {
+          const rule: ACLRule = {
+            sequence: parseInt(seqMatch[1]),
+            action: seqMatch[2].toLowerCase() as 'permit' | 'deny',
+            protocol: 'ip',
+          };
+
+          // Parse additional fields
+          const parts = seqMatch[3].split(/\s+/);
+          if (parts.length > 0) {
+            rule.protocol = parts[0];
+          }
+
+          acl.rules.push(rule);
+        }
+      }
+
+      acls.push(acl);
+    }
+
+    return acls;
+  }
+
+  /**
+   * Configure ACL for firewall integration
+   */
+  async configureACL(config: {
+    name: string;
+    type: 'standard' | 'extended';
+    rules: Omit<ACLRule, 'sequence'>[];
+  }): Promise<void> {
+    const commands = [
+      'configure terminal',
+      `ip access-list ${config.type} ${config.name}`,
+    ];
+
+    for (let i = 0; i < config.rules.length; i++) {
+      const rule = config.rules[i];
+      const seq = (i + 1) * 10;
+
+      let ruleCmd = `${seq} ${rule.action} ${rule.protocol}`;
+
+      if (rule.sourceIp) {
+        ruleCmd += ` ${rule.sourceIp}`;
+        if (rule.sourceWildcard) {
+          ruleCmd += ` ${rule.sourceWildcard}`;
+        }
+      }
+
+      if (rule.destIp) {
+        ruleCmd += ` ${rule.destIp}`;
+        if (rule.destWildcard) {
+          ruleCmd += ` ${rule.destWildcard}`;
+        }
+      }
+
+      commands.push(ruleCmd);
+    }
+
+    commands.push('exit', 'write memory');
+    await this.sshClient.executeMultipleCommands(commands);
+  }
+
+  /**
+   * Get upstream routing information for firewall integration
+   */
+  async getUpstreamRouting(): Promise<UpstreamRouting> {
+    const routes = await this.getRoutingTable();
+    const protocols = await this.getRoutingProtocolStatus();
+    const acls = await this.getACLs();
+
+    // Find default gateway
+    const defaultRoute = routes.find(r =>
+      r.destination === '0.0.0.0/0' || r.destination === '0.0.0.0'
+    );
+
+    return {
+      defaultGateway: defaultRoute?.gateway,
+      primaryRoutes: routes.filter(r => !r.destination.includes('0.0.0.0')),
+      bgpPeers: protocols.bgp?.neighbors,
+      ospfNeighbors: protocols.ospf?.neighbors,
+      acls,
+    };
   }
 }
