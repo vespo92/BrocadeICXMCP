@@ -18,6 +18,9 @@ import {
   ACL,
   ACLRule,
   UpstreamRouting,
+  StackMember,
+  StackPort,
+  StackTopology,
 } from '../types/index.js';
 
 export class BrocadeCommandExecutor {
@@ -808,6 +811,235 @@ export class BrocadeCommandExecutor {
       bgpPeers: protocols.bgp?.neighbors,
       ospfNeighbors: protocols.ospf?.neighbors,
       acls,
+    };
+  }
+
+  // ========== Switch Stacking Management ==========
+
+  /**
+   * Get stack topology and member information
+   */
+  async getStackTopology(): Promise<StackTopology> {
+    const output = await this.sshClient.executeCommand('show stack');
+    const topology: StackTopology = {
+      totalMembers: 0,
+      master: 1,
+      topology: 'standalone',
+      members: [],
+      stackPorts: [],
+    };
+
+    const lines = output.split('\n');
+    let inMemberSection = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // Detect standalone mode
+      if (trimmed.includes('Stack is not configured') || trimmed.includes('standalone')) {
+        topology.topology = 'standalone';
+        topology.totalMembers = 1;
+        continue;
+      }
+
+      // Detect topology type
+      if (trimmed.includes('Topology:')) {
+        const topoMatch = trimmed.match(/Topology:\s+(\w+)/i);
+        if (topoMatch) {
+          topology.topology = topoMatch[1].toLowerCase() as 'ring' | 'chain' | 'standalone';
+        }
+      }
+
+      // Parse stack members
+      if (trimmed.includes('Unit') && trimmed.includes('MAC') && trimmed.includes('Priority')) {
+        inMemberSection = true;
+        continue;
+      }
+
+      if (inMemberSection) {
+        // Parse member line: Unit ID, MAC, Priority, Role, State, Model
+        const memberMatch = trimmed.match(/^(\d+)\s+([0-9a-fA-F:.]+)\s+(\d+)\s+(\w+)\s+(\w+)\s+(.+)/i);
+        if (memberMatch) {
+          const member: StackMember = {
+            unitId: parseInt(memberMatch[1]),
+            macAddress: memberMatch[2],
+            priority: parseInt(memberMatch[3]),
+            role: memberMatch[4].toLowerCase() as 'master' | 'backup' | 'member' | 'standalone',
+            state: memberMatch[5].toLowerCase() as 'local' | 'remote' | 'reserved',
+            model: memberMatch[6].trim(),
+          };
+
+          topology.members.push(member);
+
+          if (member.role === 'master') {
+            topology.master = member.unitId;
+          } else if (member.role === 'backup') {
+            topology.backup = member.unitId;
+          }
+        }
+      }
+    }
+
+    topology.totalMembers = topology.members.length || 1;
+
+    // If no members found, create standalone entry
+    if (topology.members.length === 0) {
+      const systemInfo = await this.getSystemInfo();
+      topology.members.push({
+        unitId: 1,
+        macAddress: 'unknown',
+        priority: 128,
+        role: 'standalone',
+        state: 'local',
+        model: systemInfo.model,
+      });
+    }
+
+    return topology;
+  }
+
+  /**
+   * Get stack ports status
+   */
+  async getStackPorts(): Promise<StackPort[]> {
+    const output = await this.sshClient.executeCommand('show stack-port');
+    const ports: StackPort[] = [];
+
+    const lines = output.split('\n');
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // Parse stack port lines
+      // Example: "1  Stack1  2  Up  40G"
+      const portMatch = trimmed.match(/^(\d+)\s+(\S+)\s+(\d+)?\s+(\w+)\s+(\S+)?/i);
+      if (portMatch) {
+        const port: StackPort = {
+          unitId: parseInt(portMatch[1]),
+          portId: portMatch[2],
+          neighbor: portMatch[3] ? parseInt(portMatch[3]) : undefined,
+          status: portMatch[4].toLowerCase() === 'up' ? 'up' : 'down',
+          speed: portMatch[5],
+        };
+        ports.push(port);
+      }
+    }
+
+    return ports;
+  }
+
+  /**
+   * Get detailed information about a specific stack member
+   */
+  async getStackMember(unitId: number): Promise<StackMember | null> {
+    const topology = await this.getStackTopology();
+    return topology.members.find(m => m.unitId === unitId) || null;
+  }
+
+  /**
+   * Configure stack priority for a unit
+   */
+  async configureStackPriority(unitId: number, priority: number): Promise<void> {
+    const commands = [
+      'configure terminal',
+      `stack unit ${unitId}`,
+      `priority ${priority}`,
+      'exit',
+      'write memory',
+    ];
+
+    await this.sshClient.executeMultipleCommands(commands);
+  }
+
+  /**
+   * Configure stack ports
+   */
+  async configureStackPorts(config: {
+    unitId: number;
+    port1: string;
+    port2?: string;
+  }): Promise<void> {
+    const commands = [
+      'configure terminal',
+      `stack unit ${config.unitId}`,
+      `stack-port ${config.port1}`,
+    ];
+
+    if (config.port2) {
+      commands.push(`stack-port ${config.port2}`);
+    }
+
+    commands.push('exit', 'write memory');
+    await this.sshClient.executeMultipleCommands(commands);
+  }
+
+  /**
+   * Renumber a stack unit
+   */
+  async renumberStackUnit(currentId: number, newId: number): Promise<void> {
+    const commands = [
+      'configure terminal',
+      `stack unit ${currentId}`,
+      `renumber ${newId}`,
+      'exit',
+      'write memory',
+    ];
+
+    await this.sshClient.executeMultipleCommands(commands);
+  }
+
+  /**
+   * Enable or disable stack
+   */
+  async configureStack(enabled: boolean): Promise<void> {
+    const commands = [
+      'configure terminal',
+      enabled ? 'stack enable' : 'stack disable',
+      'exit',
+      'write memory',
+    ];
+
+    await this.sshClient.executeMultipleCommands(commands);
+  }
+
+  /**
+   * Get comprehensive stack health status
+   */
+  async getStackHealth(): Promise<{
+    topology: StackTopology;
+    ports: StackPort[];
+    redundancy: {
+      hasMaster: boolean;
+      hasBackup: boolean;
+      fullRedundancy: boolean;
+    };
+    connectivity: {
+      ringComplete: boolean;
+      allPortsUp: boolean;
+      degradedLinks: number;
+    };
+  }> {
+    const topology = await this.getStackTopology();
+    const ports = await this.getStackPorts();
+
+    const hasMaster = topology.members.some(m => m.role === 'master');
+    const hasBackup = topology.members.some(m => m.role === 'backup');
+    const allPortsUp = ports.length > 0 && ports.every(p => p.status === 'up');
+    const degradedLinks = ports.filter(p => p.status === 'down').length;
+
+    return {
+      topology,
+      ports,
+      redundancy: {
+        hasMaster,
+        hasBackup,
+        fullRedundancy: hasMaster && hasBackup && topology.totalMembers > 1,
+      },
+      connectivity: {
+        ringComplete: topology.topology === 'ring' && allPortsUp,
+        allPortsUp,
+        degradedLinks,
+      },
     };
   }
 }

@@ -369,6 +369,64 @@ async function executeToolHandler(
       break;
     }
 
+    // Switch Stacking tools
+    case 'get_stack_topology': {
+      const stackTopology = await commandExecutor.getStackTopology();
+      result = JSON.stringify(stackTopology, null, 2);
+      break;
+    }
+
+    case 'get_stack_ports': {
+      const stackPorts = await commandExecutor.getStackPorts();
+      result = JSON.stringify(stackPorts, null, 2);
+      break;
+    }
+
+    case 'get_stack_member': {
+      const { unitId } = validatedArgs as { unitId: number };
+      const stackMember = await commandExecutor.getStackMember(unitId);
+      if (stackMember) {
+        result = JSON.stringify(stackMember, null, 2);
+      } else {
+        result = `Stack member with unit ID ${unitId} not found`;
+      }
+      break;
+    }
+
+    case 'get_stack_health': {
+      const stackHealth = await commandExecutor.getStackHealth();
+      result = JSON.stringify(stackHealth, null, 2);
+      break;
+    }
+
+    case 'configure_stack_priority': {
+      const { unitId, priority } = validatedArgs as { unitId: number; priority: number };
+      await commandExecutor.configureStackPriority(unitId, priority);
+      result = `Stack priority for unit ${unitId} set to ${priority}`;
+      break;
+    }
+
+    case 'configure_stack_ports': {
+      const { unitId, port1, port2 } = validatedArgs as { unitId: number; port1: string; port2?: string };
+      await commandExecutor.configureStackPorts({ unitId, port1, port2 });
+      result = `Stack ports configured for unit ${unitId}: ${port1}${port2 ? `, ${port2}` : ''}`;
+      break;
+    }
+
+    case 'renumber_stack_unit': {
+      const { currentId, newId } = validatedArgs as { currentId: number; newId: number };
+      await commandExecutor.renumberStackUnit(currentId, newId);
+      result = `Stack unit renumbered from ${currentId} to ${newId}`;
+      break;
+    }
+
+    case 'configure_stack': {
+      const { enabled } = validatedArgs as { enabled: boolean };
+      await commandExecutor.configureStack(enabled);
+      result = `Stack ${enabled ? 'enabled' : 'disabled'} successfully`;
+      break;
+    }
+
     default: {
       throw new ValidationError(`Tool ${toolName} is not implemented`);
     }

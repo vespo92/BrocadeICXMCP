@@ -115,6 +115,31 @@ export const ConfigureACLSchema = z.object({
   rules: z.array(ACLRuleSchema).describe('Array of ACL rules'),
 });
 
+// Switch Stacking schemas
+export const GetStackMemberSchema = z.object({
+  unitId: z.number().min(1).max(12).describe('Stack unit ID (1-12)'),
+});
+
+export const ConfigureStackPrioritySchema = z.object({
+  unitId: z.number().min(1).max(12).describe('Stack unit ID (1-12)'),
+  priority: z.number().min(0).max(255).describe('Priority value (0-255, higher is better)'),
+});
+
+export const ConfigureStackPortsSchema = z.object({
+  unitId: z.number().min(1).max(12).describe('Stack unit ID (1-12)'),
+  port1: z.string().describe('First stack port identifier'),
+  port2: z.string().optional().describe('Second stack port identifier (for redundancy)'),
+});
+
+export const RenumberStackUnitSchema = z.object({
+  currentId: z.number().min(1).max(12).describe('Current unit ID'),
+  newId: z.number().min(1).max(12).describe('New unit ID'),
+});
+
+export const ConfigureStackSchema = z.object({
+  enabled: z.boolean().describe('Enable or disable stack'),
+});
+
 // Type exports
 export type ConfigureVlanInput = z.infer<typeof ConfigureVlanSchema>;
 export type AddPortToVlanInput = z.infer<typeof AddPortToVlanSchema>;
@@ -133,6 +158,11 @@ export type ConfigureLayer3InterfaceInput = z.infer<typeof ConfigureLayer3Interf
 export type ConfigureQoSInput = z.infer<typeof ConfigureQoSSchema>;
 export type ACLRuleInput = z.infer<typeof ACLRuleSchema>;
 export type ConfigureACLInput = z.infer<typeof ConfigureACLSchema>;
+export type GetStackMemberInput = z.infer<typeof GetStackMemberSchema>;
+export type ConfigureStackPriorityInput = z.infer<typeof ConfigureStackPrioritySchema>;
+export type ConfigureStackPortsInput = z.infer<typeof ConfigureStackPortsSchema>;
+export type RenumberStackUnitInput = z.infer<typeof RenumberStackUnitSchema>;
+export type ConfigureStackInput = z.infer<typeof ConfigureStackSchema>;
 
 // Schema map for easy access
 export const TOOL_SCHEMAS = {
@@ -174,6 +204,16 @@ export const TOOL_SCHEMAS = {
   get_acls: z.object({}),
   configure_acl: ConfigureACLSchema,
   get_upstream_routing: z.object({}),
+
+  // Switch Stacking tools
+  get_stack_topology: z.object({}),
+  get_stack_ports: z.object({}),
+  get_stack_member: GetStackMemberSchema,
+  get_stack_health: z.object({}),
+  configure_stack_priority: ConfigureStackPrioritySchema,
+  configure_stack_ports: ConfigureStackPortsSchema,
+  renumber_stack_unit: RenumberStackUnitSchema,
+  configure_stack: ConfigureStackSchema,
 } as const;
 
 // Export type for tool names

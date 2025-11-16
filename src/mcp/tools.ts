@@ -14,7 +14,7 @@ const JSON_SCHEMAS = generateToolJsonSchemas();
 interface ToolMetadata {
   name: ToolName;
   description: string;
-  category: 'info' | 'config' | 'vlan' | 'interface' | 'security' | 'maintenance' | 'lldp' | 'routing' | 'layer3' | 'acl';
+  category: 'info' | 'config' | 'vlan' | 'interface' | 'security' | 'maintenance' | 'lldp' | 'routing' | 'layer3' | 'acl' | 'stack';
   requiresPrivilege?: boolean;
 }
 
@@ -184,6 +184,52 @@ const TOOLS_METADATA: ToolMetadata[] = [
     name: 'get_upstream_routing',
     description: 'Get upstream routing information including default gateway, BGP/OSPF peers, and ACLs for firewall integration',
     category: 'routing',
+  },
+
+  // Switch Stacking tools
+  {
+    name: 'get_stack_topology',
+    description: 'Get complete stack topology including all members, roles, and configuration',
+    category: 'stack',
+  },
+  {
+    name: 'get_stack_ports',
+    description: 'Get stack port status and connections',
+    category: 'stack',
+  },
+  {
+    name: 'get_stack_member',
+    description: 'Get detailed information about a specific stack member',
+    category: 'stack',
+  },
+  {
+    name: 'get_stack_health',
+    description: 'Get comprehensive stack health including redundancy and connectivity status',
+    category: 'stack',
+  },
+  {
+    name: 'configure_stack_priority',
+    description: 'Configure stack priority for master/backup election',
+    category: 'stack',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'configure_stack_ports',
+    description: 'Configure stack ports for inter-switch connectivity',
+    category: 'stack',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'renumber_stack_unit',
+    description: 'Renumber a stack unit ID',
+    category: 'stack',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'configure_stack',
+    description: 'Enable or disable stack functionality',
+    category: 'stack',
+    requiresPrivilege: true,
   },
 ];
 

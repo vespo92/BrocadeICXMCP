@@ -181,3 +181,43 @@ export interface UpstreamRouting {
   ospfNeighbors?: OSPFNeighbor[];
   acls: ACL[];
 }
+
+// Switch Stacking types
+export interface StackMember {
+  unitId: number;
+  macAddress: string;
+  priority: number;
+  role: 'master' | 'backup' | 'member' | 'standalone';
+  state: 'local' | 'remote' | 'reserved';
+  model: string;
+  imageVersion?: string;
+  uptime?: string;
+}
+
+export interface StackPort {
+  unitId: number;
+  portId: string;
+  neighbor?: number;
+  status: 'up' | 'down';
+  speed?: string;
+}
+
+export interface StackTopology {
+  stackId?: string;
+  totalMembers: number;
+  master: number;
+  backup?: number;
+  topology: 'ring' | 'chain' | 'standalone';
+  members: StackMember[];
+  stackPorts: StackPort[];
+}
+
+export interface StackConfiguration {
+  unitId: number;
+  priority?: number;
+  stackPort?: {
+    port1: string;
+    port2?: string;
+  };
+  stackMac?: string;
+}
