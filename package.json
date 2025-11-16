@@ -54,7 +54,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.5",
     "@types/jest": "^29.5.14",
-    "@types/node": "^20.19.25",
+    "@types/node": "^24.10.1",
     "@types/ssh2": "^1.11.19",
     "@typescript-eslint/eslint-plugin": "^8.46.2",
     "@typescript-eslint/parser": "^8.46.2",
