@@ -3,6 +3,8 @@ export interface BrocadeConfig {
   port: number;
   username: string;
   password: string;
+  transport?: 'ssh' | 'telnet';
+  enablePassword?: string;
   timeout?: number;
   keepaliveInterval?: number;
   maxRetries?: number;

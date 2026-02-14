@@ -19,7 +19,7 @@ async function main() {
     validateEnvironment();
 
     // Initialize clients and configuration
-    const { sshClient, commandExecutor, logger, serverConfig } = initializeClients('stdio');
+    const { switchClient, commandExecutor, logger, serverConfig } = initializeClients('stdio');
 
     // Create MCP server
     const server = new Server(
@@ -37,7 +37,7 @@ async function main() {
 
     // Setup shared handlers
     setupHandlers(server, {
-      sshClient,
+      switchClient,
       commandExecutor,
       logger,
       transportType: 'stdio',
@@ -53,8 +53,8 @@ async function main() {
 
     // Handle transport closure
     transport.onclose = async () => {
-      logInfo(logger, 'Stdio transport closed, disconnecting SSH client');
-      sshClient.disconnect();
+      logInfo(logger, 'Stdio transport closed, disconnecting switch client');
+      switchClient.disconnect();
     };
 
     // Start the server

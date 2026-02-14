@@ -7,6 +7,8 @@ import dotenv from 'dotenv';
 import winston from 'winston';
 import { ConfigurationError } from './errors.js';
 import { BrocadeSSHClient } from '../lib/ssh-client.js';
+import { BrocadeTelnetClient } from '../lib/telnet-client.js';
+import { BrocadeTransport } from '../lib/transport-interface.js';
 import { BrocadeCommandExecutor } from '../lib/brocade-commands.js';
 
 // Load environment variables
@@ -20,6 +22,8 @@ export const BrocadeConfigSchema = z.object({
   port: z.number().min(1).max(65535).default(22),
   username: z.string().min(1, 'Username is required'),
   password: z.string().min(1, 'Password is required'),
+  transport: z.enum(['ssh', 'telnet']).default('ssh'),
+  enablePassword: z.string().optional(),
   timeout: z.number().min(1000).default(30000),
   keepaliveInterval: z.number().min(1000).default(10000),
   maxRetries: z.number().min(0).default(3),
@@ -47,11 +51,31 @@ export type ServerConfig = z.infer<typeof ServerConfigSchema>;
  */
 export function loadBrocadeConfig(): BrocadeConfig {
   try {
+    // Debug: log enable password env var presence
+    const enablePwEnv = process.env.BROCADE_ENABLE_PASSWORD;
+    if (enablePwEnv) {
+      // eslint-disable-next-line no-console
+      console.error(`[config] BROCADE_ENABLE_PASSWORD is set (length=${enablePwEnv.length})`);
+    } else {
+      // eslint-disable-next-line no-console
+      console.error('[config] BROCADE_ENABLE_PASSWORD is NOT set');
+    }
+
+    const transport = (process.env.BROCADE_TRANSPORT || 'ssh') as 'ssh' | 'telnet';
+
+    // Auto-default port: 23 for telnet, 22 for ssh
+    const defaultPort = transport === 'telnet' ? 23 : 22;
+    const port = process.env.BROCADE_PORT
+      ? parseInt(process.env.BROCADE_PORT, 10)
+      : defaultPort;
+
     const config = BrocadeConfigSchema.parse({
       host: process.env.BROCADE_HOST,
-      port: process.env.BROCADE_PORT ? parseInt(process.env.BROCADE_PORT, 10) : 22,
+      port,
       username: process.env.BROCADE_USERNAME,
       password: process.env.BROCADE_PASSWORD,
+      transport,
+      enablePassword: process.env.BROCADE_ENABLE_PASSWORD ?? undefined,
       timeout: process.env.SSH_TIMEOUT ? parseInt(process.env.SSH_TIMEOUT, 10) : 30000,
       keepaliveInterval: process.env.SSH_KEEPALIVE_INTERVAL ? parseInt(process.env.SSH_KEEPALIVE_INTERVAL, 10) : 10000,
       maxRetries: process.env.SSH_MAX_RETRIES ? parseInt(process.env.SSH_MAX_RETRIES, 10) : 3,
@@ -93,10 +117,31 @@ export function loadServerConfig(): ServerConfig {
 }
 
 /**
+ * Create the appropriate transport client based on configuration
+ */
+export function createTransportClient(
+  config: BrocadeConfig,
+  logger: winston.Logger
+): BrocadeTransport {
+  if (config.transport === 'telnet') {
+    logger.info('Using telnet transport', {
+      host: config.host,
+      port: config.port,
+      hasEnablePassword: !!config.enablePassword,
+      enablePasswordLength: config.enablePassword?.length ?? 0,
+    });
+    return new BrocadeTelnetClient(config, logger);
+  }
+
+  logger.info('Using SSH transport', { host: config.host, port: config.port });
+  return new BrocadeSSHClient(config, logger);
+}
+
+/**
  * Container for initialized clients
  */
 export interface InitializedClients {
-  sshClient: BrocadeSSHClient;
+  switchClient: BrocadeTransport;
   commandExecutor: BrocadeCommandExecutor;
   logger: winston.Logger;
   brocadeConfig: BrocadeConfig;
@@ -115,14 +160,14 @@ export function initializeClients(
   // Create logger with transport-specific configuration
   const logger = createLogger(serverConfig, transportType);
 
-  // Initialize SSH client with logger
-  const sshClient = new BrocadeSSHClient(brocadeConfig, logger);
+  // Create the transport client (SSH or Telnet) based on config
+  const switchClient = createTransportClient(brocadeConfig, logger);
 
-  // Initialize command executor
-  const commandExecutor = new BrocadeCommandExecutor(sshClient);
+  // Initialize command executor with the transport client
+  const commandExecutor = new BrocadeCommandExecutor(switchClient);
 
   return {
-    sshClient,
+    switchClient,
     commandExecutor,
     logger,
     brocadeConfig,
@@ -184,12 +229,27 @@ export function createLogger(
  * Validate environment variables on startup
  */
 export function validateEnvironment(): void {
-  const required = ['BROCADE_HOST', 'BROCADE_USERNAME', 'BROCADE_PASSWORD'];
-  const missing = required.filter(key => !process.env[key]);
+  const transport = process.env.BROCADE_TRANSPORT || 'ssh';
 
-  if (missing.length > 0) {
-    throw new ConfigurationError(
-      `Missing required environment variables: ${missing.join(', ')}`
-    );
+  // Telnet connections may not need username/password (open access)
+  if (transport === 'telnet') {
+    const required = ['BROCADE_HOST'];
+    const missing = required.filter(key => !process.env[key]);
+    if (missing.length > 0) {
+      throw new ConfigurationError(
+        `Missing required environment variables: ${missing.join(', ')}`
+      );
+    }
+    // Default username/password to empty for telnet if not set
+    if (!process.env.BROCADE_USERNAME) process.env.BROCADE_USERNAME = 'admin';
+    if (!process.env.BROCADE_PASSWORD) process.env.BROCADE_PASSWORD = 'none';
+  } else {
+    const required = ['BROCADE_HOST', 'BROCADE_USERNAME', 'BROCADE_PASSWORD'];
+    const missing = required.filter(key => !process.env[key]);
+    if (missing.length > 0) {
+      throw new ConfigurationError(
+        `Missing required environment variables: ${missing.join(', ')}`
+      );
+    }
   }
 }

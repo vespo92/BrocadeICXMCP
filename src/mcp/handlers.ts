@@ -18,7 +18,7 @@ import type {
   ReadResourceRequest,
 } from '@modelcontextprotocol/sdk/types.js';
 import winston from 'winston';
-import { BrocadeSSHClient } from '../lib/ssh-client.js';
+import { BrocadeTransport } from '../lib/transport-interface.js';
 import { BrocadeCommandExecutor } from '../lib/brocade-commands.js';
 import { generateTools, getToolCategory, requiresPrivilege } from './tools.js';
 import { generateResources, readResource } from './resources.js';
@@ -26,6 +26,7 @@ import { TOOL_SCHEMAS, ToolName } from './schemas.js';
 import {
   isBrocadeError,
   isSSHConnectionError,
+  isTelnetConnectionError,
   isCommandExecutionError,
   ValidationError,
 } from '../core/errors.js';
@@ -35,7 +36,7 @@ import { logError, logInfo, logDebug, createTimer } from '../core/logger.js';
  * Handler dependencies
  */
 export interface HandlerDependencies {
-  sshClient: BrocadeSSHClient;
+  switchClient: BrocadeTransport;
   commandExecutor: BrocadeCommandExecutor;
   logger: winston.Logger;
   transportType: 'stdio' | 'sse';
@@ -519,6 +520,14 @@ function convertToMcpError(error: unknown): McpError {
     return new McpError(
       ErrorCode.InternalError,
       `SSH connection failed: ${error.message}`,
+      error.details
+    );
+  }
+
+  if (isTelnetConnectionError(error)) {
+    return new McpError(
+      ErrorCode.InternalError,
+      `Telnet connection failed: ${error.message}`,
       error.details
     );
   }

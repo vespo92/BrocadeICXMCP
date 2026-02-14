@@ -1,4 +1,4 @@
-import { BrocadeSSHClient } from './ssh-client.js';
+import { BrocadeTransport } from './transport-interface.js';
 import {
   VlanInfo,
   InterfaceInfo,
@@ -33,7 +33,7 @@ import {
 } from '../types/index.js';
 
 export class BrocadeCommandExecutor {
-  constructor(private sshClient: BrocadeSSHClient) {}
+  constructor(private sshClient: BrocadeTransport) {}
 
   async getSystemInfo(): Promise<SystemInfo> {
     const output = await this.sshClient.executeCommand('show version');

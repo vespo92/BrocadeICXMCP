@@ -31,7 +31,7 @@ async function main() {
     validateEnvironment();
 
     // Initialize clients and configuration
-    const { sshClient, commandExecutor, logger, serverConfig } = initializeClients('sse');
+    const { switchClient, commandExecutor, logger, serverConfig } = initializeClients('sse');
 
     // Create Express app
     const app = express();
@@ -47,8 +47,7 @@ async function main() {
 
     // Health check endpoint
     app.get('/health', async (req, res) => {
-      const isHealthy = await sshClient.healthCheck();
-      const stats = sshClient.getStats();
+      const isHealthy = await switchClient.healthCheck();
 
       res.json({
         status: isHealthy ? 'healthy' : 'unhealthy',
@@ -56,7 +55,9 @@ async function main() {
           name: serverConfig.name,
           version: serverConfig.version,
         },
-        ssh: stats,
+        connection: {
+          connected: switchClient.isConnected(),
+        },
         monitoring: {
           activeSessions: monitoringSessions.size,
         },
@@ -94,7 +95,7 @@ async function main() {
 
       // Setup shared handlers with SSE-specific extensions
       setupHandlers(server, {
-        sshClient,
+        switchClient,
         commandExecutor,
         logger,
         transportType: 'sse',
@@ -248,8 +249,8 @@ async function main() {
       }
       monitoringSessions.clear();
 
-      // Disconnect SSH client
-      sshClient.disconnect();
+      // Disconnect switch client
+      switchClient.disconnect();
 
       // Close the server
       server.close(() => {

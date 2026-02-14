@@ -5,6 +5,7 @@
 import { Client, ClientChannel } from 'ssh2';
 import winston from 'winston';
 import { BrocadeConfig } from '../types/index.js';
+import { BrocadeTransport } from './transport-interface.js';
 import {
   SSHConnectionError,
   CommandExecutionError,
@@ -27,7 +28,7 @@ enum ConnectionState {
 /**
  * SSH client with enhanced features
  */
-export class BrocadeSSHClient {
+export class BrocadeSSHClient implements BrocadeTransport {
   private client: Client | null = null;
   private config: BrocadeConfig;
   private logger: winston.Logger;
@@ -118,6 +119,19 @@ export class BrocadeSSHClient {
 
       this.client = new Client();
 
+      // Brocade switches use keyboard-interactive auth
+      // Register handler before connection to respond to password prompts
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (this.client as any).on('keyboard-interactive', (
+        _name: string,
+        _instructions: string,
+        _instructionsLang: string,
+        prompts: Array<{ prompt: string; echo: boolean }>,
+        finish: (responses: string[]) => void
+      ) => {
+        finish(prompts.map(() => this.config.password));
+      });
+
       const connectionTimeout = setTimeout(() => {
         if (this.client) {
           this.client.end();
@@ -180,11 +194,39 @@ export class BrocadeSSHClient {
           port: this.config.port,
           username: this.config.username,
           password: this.config.password,
+          tryKeyboard: true,
           keepaliveInterval: this.config.keepaliveInterval ?? 10000,
           keepaliveCountMax: 3,
           readyTimeout: this.config.timeout ?? 30000,
           algorithms: {
-            serverHostKey: ['ssh-rsa', 'ssh-dss', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521'],
+            kex: [
+              'ecdh-sha2-nistp256',
+              'ecdh-sha2-nistp384',
+              'ecdh-sha2-nistp521',
+              'diffie-hellman-group-exchange-sha256',
+              'diffie-hellman-group14-sha256',
+              'diffie-hellman-group14-sha1',
+              'diffie-hellman-group-exchange-sha1',
+              'diffie-hellman-group1-sha1',
+            ],
+            serverHostKey: [
+              'ssh-rsa',
+              'ssh-dss',
+              'ecdsa-sha2-nistp256',
+              'ecdsa-sha2-nistp384',
+              'ecdsa-sha2-nistp521',
+            ],
+            cipher: [
+              'aes128-ctr',
+              'aes192-ctr',
+              'aes256-ctr',
+              'aes128-gcm@openssh.com',
+              'aes256-gcm@openssh.com',
+              'aes256-cbc',
+              'aes192-cbc',
+              'aes128-cbc',
+              '3des-cbc',
+            ],
           },
         });
       } catch (err) {

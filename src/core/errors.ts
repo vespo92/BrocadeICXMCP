@@ -26,6 +26,13 @@ export class SSHConnectionError extends BrocadeError {
   }
 }
 
+export class TelnetConnectionError extends BrocadeError {
+  constructor(message: string, details?: unknown) {
+    super(message, 'TELNET_CONNECTION_ERROR', details);
+    this.name = 'TelnetConnectionError';
+  }
+}
+
 export class CommandExecutionError extends BrocadeError {
   public readonly command?: string;
   public readonly exitCode?: number;
@@ -89,6 +96,13 @@ export function isBrocadeError(error: unknown): error is BrocadeError {
  */
 export function isSSHConnectionError(error: unknown): error is SSHConnectionError {
   return error instanceof SSHConnectionError;
+}
+
+/**
+ * Type guard to check if an error is a TelnetConnectionError
+ */
+export function isTelnetConnectionError(error: unknown): error is TelnetConnectionError {
+  return error instanceof TelnetConnectionError;
 }
 
 /**
