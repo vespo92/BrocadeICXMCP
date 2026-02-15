@@ -32,10 +32,35 @@ import {
   OpticalModuleInfo,
 } from '../types/index.js';
 
+interface CacheEntry {
+  data: unknown;
+  expires: number;
+}
+
 export class BrocadeCommandExecutor {
+  private cache: Map<string, CacheEntry> = new Map();
+  private readonly CACHE_TTL = 30_000; // 30 seconds
+
   constructor(private sshClient: BrocadeTransport) {}
 
+  private getCached<T>(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (entry && Date.now() < entry.expires) return entry.data as T;
+    this.cache.delete(key);
+    return null;
+  }
+
+  private setCache(key: string, data: unknown): void {
+    this.cache.set(key, { data, expires: Date.now() + this.CACHE_TTL });
+  }
+
+  private invalidateCache(): void {
+    this.cache.clear();
+  }
+
   async getSystemInfo(): Promise<SystemInfo> {
+    const cached = this.getCached<SystemInfo>('systemInfo');
+    if (cached) return cached;
     const output = await this.sshClient.executeCommand('show version');
 
     const info: SystemInfo = {
@@ -65,10 +90,13 @@ export class BrocadeCommandExecutor {
       }
     }
 
+    this.setCache('systemInfo', info);
     return info;
   }
 
   async getVlans(): Promise<VlanInfo[]> {
+    const cached = this.getCached<VlanInfo[]>('vlans');
+    if (cached) return cached;
     const output = await this.sshClient.executeCommand('show vlan');
     const vlans: VlanInfo[] = [];
 
@@ -91,10 +119,13 @@ export class BrocadeCommandExecutor {
       }
     }
 
+    this.setCache('vlans', vlans);
     return vlans;
   }
 
   async getInterfaces(): Promise<InterfaceInfo[]> {
+    const cached = this.getCached<InterfaceInfo[]>('interfaces');
+    if (cached) return cached;
     const output = await this.sshClient.executeCommand('show interfaces brief');
     const interfaces: InterfaceInfo[] = [];
 
@@ -121,6 +152,7 @@ export class BrocadeCommandExecutor {
       }
     }
 
+    this.setCache('interfaces', interfaces);
     return interfaces;
   }
 
@@ -182,6 +214,7 @@ export class BrocadeCommandExecutor {
     ].filter(cmd => cmd);
 
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   async addPortToVlan(port: string, vlanId: number, tagged: boolean = false): Promise<void> {
@@ -194,6 +227,7 @@ export class BrocadeCommandExecutor {
     ];
 
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   async configureInterface(interfaceName: string, config: {
@@ -216,6 +250,7 @@ export class BrocadeCommandExecutor {
 
     commands.push('exit', 'write memory');
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   async saveConfiguration(): Promise<void> {
@@ -239,6 +274,8 @@ export class BrocadeCommandExecutor {
   }
 
   async getSpanningTree(): Promise<{ mode: string; instances: unknown[] }> {
+    const cached = this.getCached<{ mode: string; instances: unknown[] }>('spanningTree');
+    if (cached) return cached;
     const output = await this.sshClient.executeCommand('show spanning-tree');
     // Parse spanning tree output
     const lines = output.split('\n');
@@ -254,6 +291,7 @@ export class BrocadeCommandExecutor {
       // Additional parsing logic could be added here
     }
 
+    this.setCache('spanningTree', result);
     return result;
   }
 
@@ -270,6 +308,7 @@ export class BrocadeCommandExecutor {
 
     commands.push('exit', 'write memory');
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   async configurePortSecurity(port: string, maxMacAddresses: number, violation: string): Promise<void> {
@@ -284,10 +323,14 @@ export class BrocadeCommandExecutor {
     ];
 
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   async executeCommand(command: string): Promise<string> {
-    return await this.sshClient.executeCommand(command);
+    const result = await this.sshClient.executeCommand(command);
+    // Invalidate cache since raw commands may modify switch state
+    this.invalidateCache();
+    return result;
   }
 
   async reloadSwitch(confirm: boolean = false): Promise<void> {
@@ -403,6 +446,7 @@ export class BrocadeCommandExecutor {
 
     commands.push('exit', 'write memory');
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   // ========== Layer 2-3 Management ==========
@@ -526,6 +570,7 @@ export class BrocadeCommandExecutor {
 
     commands.push(routeCmd, 'exit', 'write memory');
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   /**
@@ -553,6 +598,7 @@ export class BrocadeCommandExecutor {
 
     commands.push('exit', 'write memory');
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   /**
@@ -580,6 +626,7 @@ export class BrocadeCommandExecutor {
     );
 
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   /**
@@ -598,6 +645,7 @@ export class BrocadeCommandExecutor {
 
     commands.push('exit', 'write memory');
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   // ========== Routing Protocol Management ==========
@@ -799,6 +847,7 @@ export class BrocadeCommandExecutor {
 
     commands.push('exit', 'write memory');
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   /**
@@ -958,6 +1007,7 @@ export class BrocadeCommandExecutor {
     ];
 
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   /**
@@ -980,6 +1030,7 @@ export class BrocadeCommandExecutor {
 
     commands.push('exit', 'write memory');
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   /**
@@ -995,6 +1046,7 @@ export class BrocadeCommandExecutor {
     ];
 
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   /**
@@ -1009,6 +1061,7 @@ export class BrocadeCommandExecutor {
     ];
 
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   /**
@@ -1076,6 +1129,7 @@ export class BrocadeCommandExecutor {
 
     commands.push('exit', 'write memory');
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   /**
@@ -1118,6 +1172,7 @@ export class BrocadeCommandExecutor {
 
     commands.push('exit', 'exit', 'write memory');
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   /**
@@ -1153,6 +1208,7 @@ export class BrocadeCommandExecutor {
 
     commands.push('exit', 'write memory');
     await this.sshClient.executeMultipleCommands(commands);
+    this.invalidateCache();
   }
 
   /**

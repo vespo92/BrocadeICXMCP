@@ -498,6 +498,94 @@ async function executeToolHandler(
       break;
     }
 
+    // Performance / batch operation tools
+    case 'execute_batch': {
+      const { commands } = validatedArgs as { commands: string[] };
+      logInfo(logger, 'Executing batch commands', { count: commands.length });
+      const batchResults = await deps.switchClient.executeMultipleCommands(commands);
+      const batchOutput = commands.map((cmd, i) => ({
+        command: cmd,
+        output: batchResults[i] ?? '',
+        success: batchResults[i] !== '',
+      }));
+      result = JSON.stringify(batchOutput, null, 2);
+      break;
+    }
+
+    case 'paste_config': {
+      const { config, save } = validatedArgs as { config: string; save?: boolean };
+      // Split by newline, filter blanks and comments
+      const configLines = config
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0 && !line.startsWith('!'));
+
+      if (configLines.length === 0) {
+        result = 'No valid configuration lines to apply';
+        break;
+      }
+
+      // Prepend configure terminal if not already present
+      const cmds: string[] = [];
+      if (!configLines[0].toLowerCase().startsWith('configure')) {
+        cmds.push('configure terminal');
+      }
+      cmds.push(...configLines);
+
+      // Append end + write memory if save requested
+      const lastCmd = cmds[cmds.length - 1].toLowerCase();
+      if (!lastCmd.startsWith('end')) {
+        cmds.push('end');
+      }
+      if (save) {
+        cmds.push('write memory');
+      }
+
+      logInfo(logger, 'Pasting configuration', { lines: cmds.length, save });
+      const pasteResults = await deps.switchClient.executeMultipleCommands(cmds);
+      const pasteOutput = cmds.map((cmd, i) => ({
+        command: cmd,
+        output: pasteResults[i] ?? '',
+        success: pasteResults[i] !== undefined,
+      }));
+      result = JSON.stringify(pasteOutput, null, 2);
+      break;
+    }
+
+    case 'create_vlan_full': {
+      const { id, name, taggedPorts, untaggedPorts } = validatedArgs as {
+        id: number;
+        name: string;
+        taggedPorts?: string[];
+        untaggedPorts?: string[];
+      };
+      const vlanCmds: string[] = [
+        'configure terminal',
+        name ? `vlan ${id} name ${name}` : `vlan ${id}`,
+      ];
+      if (taggedPorts && taggedPorts.length > 0) {
+        for (const port of taggedPorts) {
+          vlanCmds.push(`tagged ${port}`);
+        }
+      }
+      if (untaggedPorts && untaggedPorts.length > 0) {
+        for (const port of untaggedPorts) {
+          vlanCmds.push(`untagged ${port}`);
+        }
+      }
+      vlanCmds.push('exit', 'end', 'write memory');
+
+      logInfo(logger, 'Creating full VLAN configuration', {
+        vlanId: id,
+        name,
+        taggedPorts: taggedPorts?.length ?? 0,
+        untaggedPorts: untaggedPorts?.length ?? 0,
+      });
+      await deps.switchClient.executeMultipleCommands(vlanCmds);
+      result = `VLAN ${id} "${name}" created with ${taggedPorts?.length ?? 0} tagged and ${untaggedPorts?.length ?? 0} untagged ports`;
+      break;
+    }
+
     default: {
       throw new ValidationError(`Tool ${toolName} is not implemented`);
     }

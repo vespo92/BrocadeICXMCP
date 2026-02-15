@@ -179,6 +179,23 @@ export const GetOpticalModuleInfoSchema = z.object({
   port: z.string().optional().describe('Optional specific port identifier'),
 });
 
+// Performance / batch operation schemas
+export const ExecuteBatchSchema = z.object({
+  commands: z.array(z.string()).min(1).describe('Array of CLI commands to execute in order'),
+});
+
+export const PasteConfigSchema = z.object({
+  config: z.string().describe('Multi-line configuration block (one command per line, lines starting with ! are ignored)'),
+  save: z.boolean().optional().default(false).describe('Run "write memory" after applying config (default: false)'),
+});
+
+export const CreateVlanFullSchema = z.object({
+  id: z.number().min(1).max(4094).describe('VLAN ID (1-4094)'),
+  name: z.string().describe('VLAN name'),
+  taggedPorts: z.array(z.string()).optional().describe('Array of tagged (trunk) port identifiers (e.g., ["ethernet 1/1/1", "ethernet 2/1/1"])'),
+  untaggedPorts: z.array(z.string()).optional().describe('Array of untagged (access) port identifiers'),
+});
+
 // Type exports
 export type ConfigureVlanInput = z.infer<typeof ConfigureVlanSchema>;
 export type AddPortToVlanInput = z.infer<typeof AddPortToVlanSchema>;
@@ -209,6 +226,9 @@ export type GetPortSecurityStatusInput = z.infer<typeof GetPortSecurityStatusSch
 export type GetInterfaceStatisticsInput = z.infer<typeof GetInterfaceStatisticsSchema>;
 export type RunCableDiagnosticsInput = z.infer<typeof RunCableDiagnosticsSchema>;
 export type GetOpticalModuleInfoInput = z.infer<typeof GetOpticalModuleInfoSchema>;
+export type ExecuteBatchInput = z.infer<typeof ExecuteBatchSchema>;
+export type PasteConfigInput = z.infer<typeof PasteConfigSchema>;
+export type CreateVlanFullInput = z.infer<typeof CreateVlanFullSchema>;
 
 // Schema map for easy access
 export const TOOL_SCHEMAS = {
@@ -273,6 +293,11 @@ export const TOOL_SCHEMAS = {
   get_system_health: z.object({}),
   run_cable_diagnostics: RunCableDiagnosticsSchema,
   get_optical_module_info: GetOpticalModuleInfoSchema,
+
+  // Performance / batch operation tools
+  execute_batch: ExecuteBatchSchema,
+  paste_config: PasteConfigSchema,
+  create_vlan_full: CreateVlanFullSchema,
 } as const;
 
 // Export type for tool names
