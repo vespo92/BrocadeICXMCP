@@ -405,14 +405,19 @@ export class BrocadeSSHClient implements BrocadeTransport {
   }
 
   /**
-   * Execute multiple commands in sequence
+   * Execute multiple commands in sequence with optimized timeouts for config commands
    */
   async executeMultipleCommands(commands: string[], timeout?: number): Promise<string[]> {
     const results: string[] = [];
+    const defaultTimeout = timeout ?? this.config.timeout ?? 30000;
 
     for (const command of commands) {
       try {
-        const result = await this.executeCommand(command, timeout);
+        // Use shorter timeout for config-mode commands
+        const isShowCommand = command.trim().toLowerCase().startsWith('show');
+        const effectiveTimeout = isShowCommand ? defaultTimeout : Math.min(defaultTimeout, 10000);
+
+        const result = await this.executeCommand(command, effectiveTimeout);
         results.push(result);
       } catch (error) {
         // Log error but continue with other commands

@@ -331,3 +331,11 @@ export interface OpticalModuleInfo {
   txPower?: number;
   rxPower?: number;
 }
+
+// Batch command result for structured output
+export interface BatchCommandResult {
+  command: string;
+  output: string;
+  success: boolean;
+  error?: string;
+}

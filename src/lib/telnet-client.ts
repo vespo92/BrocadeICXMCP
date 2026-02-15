@@ -530,14 +530,30 @@ export class BrocadeTelnetClient implements BrocadeTransport {
   }
 
   /**
-   * Execute multiple commands sequentially
+   * Execute multiple commands sequentially with optimized timeouts for config commands.
+   * Config-mode commands (those that don't start with "show") use a shorter timeout
+   * since they complete quickly. Inline errors are detected and logged.
    */
   async executeMultipleCommands(commands: string[], timeout?: number): Promise<string[]> {
     const results: string[] = [];
+    const defaultTimeout = timeout ?? this.config.timeout ?? 30000;
 
     for (const command of commands) {
       try {
-        const result = await this.executeCommand(command, timeout);
+        // Use a shorter timeout for config-mode commands that complete quickly
+        const isShowCommand = command.trim().toLowerCase().startsWith('show');
+        const effectiveTimeout = isShowCommand ? defaultTimeout : Math.min(defaultTimeout, 10000);
+
+        const result = await this.executeCommand(command, effectiveTimeout);
+
+        // Detect inline errors in output
+        if (this.hasInlineError(result)) {
+          logWarn(this.logger, 'Command returned inline error', {
+            command,
+            output: result.slice(0, 200),
+          });
+        }
+
         results.push(result);
       } catch (error) {
         logError(this.logger, error, { command, index: results.length });
@@ -546,6 +562,21 @@ export class BrocadeTelnetClient implements BrocadeTransport {
     }
 
     return results;
+  }
+
+  /**
+   * Check if command output contains an inline error from the switch
+   */
+  private hasInlineError(output: string): boolean {
+    const errorPatterns = [
+      /Invalid input ->/i,
+      /Error:/i,
+      /not found/i,
+      /VLAN.*does not exist/i,
+      /Incomplete command/i,
+      /Ambiguous input/i,
+    ];
+    return errorPatterns.some(pattern => pattern.test(output));
   }
 
   /**

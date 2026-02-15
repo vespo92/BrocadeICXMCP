@@ -14,7 +14,7 @@ const JSON_SCHEMAS = generateToolJsonSchemas();
 interface ToolMetadata {
   name: ToolName;
   description: string;
-  category: 'info' | 'config' | 'vlan' | 'interface' | 'security' | 'maintenance' | 'lldp' | 'routing' | 'layer3' | 'acl' | 'stack' | 'monitoring' | 'diagnostics';
+  category: 'info' | 'config' | 'vlan' | 'interface' | 'security' | 'maintenance' | 'lldp' | 'routing' | 'layer3' | 'acl' | 'stack' | 'monitoring' | 'diagnostics' | 'batch';
   requiresPrivilege?: boolean;
 }
 
@@ -282,6 +282,26 @@ const TOOLS_METADATA: ToolMetadata[] = [
     name: 'get_optical_module_info',
     description: 'Get SFP/SFP+ optical module information including temperature and power levels',
     category: 'diagnostics',
+  },
+
+  // Performance / batch operation tools
+  {
+    name: 'execute_batch',
+    description: 'Execute multiple CLI commands in sequence on the switch. Returns all outputs. Use this instead of calling execute_command repeatedly for much faster bulk operations.',
+    category: 'batch',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'paste_config',
+    description: 'Paste a multi-line configuration block into the switch. Automatically enters config mode, executes all lines, and optionally saves. Lines starting with ! are treated as comments and ignored.',
+    category: 'batch',
+    requiresPrivilege: true,
+  },
+  {
+    name: 'create_vlan_full',
+    description: 'Create a VLAN with name, tagged trunk ports, and untagged access ports in one operation. Automatically enters config mode, creates the VLAN, assigns ports, and saves.',
+    category: 'vlan',
+    requiresPrivilege: true,
   },
 ];
 
