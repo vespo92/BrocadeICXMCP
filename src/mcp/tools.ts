@@ -92,6 +92,28 @@ const TOOLS_METADATA: ToolMetadata[] = [
     requiresPrivilege: true,
   },
 
+  // MAC address table, routing table, config, logs
+  {
+    name: 'get_mac_address_table',
+    description: 'Get the MAC address table showing which MAC addresses are learned on which ports and VLANs',
+    category: 'info',
+  },
+  {
+    name: 'get_routing_table',
+    description: 'Get the IP routing table (Layer 3 switches only)',
+    category: 'routing',
+  },
+  {
+    name: 'get_running_config',
+    description: 'Get the current running configuration of the switch',
+    category: 'info',
+  },
+  {
+    name: 'get_log',
+    description: 'Get switch syslog entries for troubleshooting',
+    category: 'monitoring',
+  },
+
   // LLDP tools
   {
     name: 'get_lldp_neighbors',

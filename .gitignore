@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .env
+AGENT-BRIEF.md
 *.log
 .DS_Store
 coverage/

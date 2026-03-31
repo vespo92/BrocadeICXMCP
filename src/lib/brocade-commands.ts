@@ -206,7 +206,7 @@ export class BrocadeCommandExecutor {
 
   async configureVlan(vlanId: number, name?: string): Promise<void> {
     const commands = [
-      'configure terminal',
+      'conf t',
       `vlan ${vlanId}`,
       name !== undefined && name !== '' ? `name ${name}` : '',
       'exit',
@@ -219,7 +219,7 @@ export class BrocadeCommandExecutor {
 
   async addPortToVlan(port: string, vlanId: number, tagged: boolean = false): Promise<void> {
     const commands = [
-      'configure terminal',
+      'conf t',
       `vlan ${vlanId}`,
       tagged ? `tagged ${port}` : `untagged ${port}`,
       'exit',
@@ -236,7 +236,7 @@ export class BrocadeCommandExecutor {
     speed?: string;
     duplex?: string;
   }): Promise<void> {
-    const commands = ['configure terminal', `interface ${interfaceName}`];
+    const commands = ['conf t', `interface ${interfaceName}`];
 
     if (config.description !== undefined && config.description !== '') {
       commands.push(`port-name ${config.description}`);
@@ -296,7 +296,7 @@ export class BrocadeCommandExecutor {
   }
 
   async configureSpanningTree(mode: string, priority?: number): Promise<void> {
-    const commands = ['configure terminal'];
+    const commands = ['conf t'];
 
     if (mode) {
       commands.push(`spanning-tree mode ${mode}`);
@@ -313,7 +313,7 @@ export class BrocadeCommandExecutor {
 
   async configurePortSecurity(port: string, maxMacAddresses: number, violation: string): Promise<void> {
     const commands = [
-      'configure terminal',
+      'conf t',
       `interface ${port}`,
       'port security',
       `port security maximum ${maxMacAddresses}`,
@@ -430,7 +430,7 @@ export class BrocadeCommandExecutor {
     transmitInterval?: number;
     holdMultiplier?: number;
   }): Promise<void> {
-    const commands = ['configure terminal'];
+    const commands = ['conf t'];
 
     if (config.enabled !== undefined) {
       commands.push(config.enabled ? 'lldp run' : 'no lldp run');
@@ -560,7 +560,7 @@ export class BrocadeCommandExecutor {
    * Configure static route
    */
   async configureStaticRoute(route: StaticRoute): Promise<void> {
-    const commands = ['configure terminal'];
+    const commands = ['conf t'];
 
     let routeCmd = `ip route ${route.destination} ${route.netmask} ${route.gateway}`;
 
@@ -582,7 +582,7 @@ export class BrocadeCommandExecutor {
     type?: 'static' | 'lacp';
     name?: string;
   }): Promise<void> {
-    const commands = ['configure terminal'];
+    const commands = ['conf t'];
 
     // Create LAG
     commands.push(`lag ${config.id} ${config.type || 'static'}`);
@@ -611,7 +611,7 @@ export class BrocadeCommandExecutor {
     description?: string;
   }): Promise<void> {
     const commands = [
-      'configure terminal',
+      'conf t',
       `interface ve ${config.vlan}`,
     ];
 
@@ -633,7 +633,7 @@ export class BrocadeCommandExecutor {
    * Configure QoS profile
    */
   async configureQoS(config: QoSProfile): Promise<void> {
-    const commands = ['configure terminal'];
+    const commands = ['conf t'];
 
     if (config.priority !== undefined) {
       commands.push(`qos priority ${config.priority}`);
@@ -818,7 +818,7 @@ export class BrocadeCommandExecutor {
     rules: Omit<ACLRule, 'sequence'>[];
   }): Promise<void> {
     const commands = [
-      'configure terminal',
+      'conf t',
       `ip access-list ${config.type} ${config.name}`,
     ];
 
@@ -999,7 +999,7 @@ export class BrocadeCommandExecutor {
    */
   async configureStackPriority(unitId: number, priority: number): Promise<void> {
     const commands = [
-      'configure terminal',
+      'conf t',
       `stack unit ${unitId}`,
       `priority ${priority}`,
       'exit',
@@ -1019,7 +1019,7 @@ export class BrocadeCommandExecutor {
     port2?: string;
   }): Promise<void> {
     const commands = [
-      'configure terminal',
+      'conf t',
       `stack unit ${config.unitId}`,
       `stack-port ${config.port1}`,
     ];
@@ -1038,7 +1038,7 @@ export class BrocadeCommandExecutor {
    */
   async renumberStackUnit(currentId: number, newId: number): Promise<void> {
     const commands = [
-      'configure terminal',
+      'conf t',
       `stack unit ${currentId}`,
       `renumber ${newId}`,
       'exit',
@@ -1054,7 +1054,7 @@ export class BrocadeCommandExecutor {
    */
   async configureStack(enabled: boolean): Promise<void> {
     const commands = [
-      'configure terminal',
+      'conf t',
       enabled ? 'stack enable' : 'stack disable',
       'exit',
       'write memory',
@@ -1112,7 +1112,7 @@ export class BrocadeCommandExecutor {
    */
   async configureDHCPSnooping(config: DHCPSnoopingConfig): Promise<void> {
     const commands = [
-      'configure terminal',
+      'conf t',
       config.enabled ? 'ip dhcp snooping' : 'no ip dhcp snooping',
       `ip dhcp snooping vlan ${config.vlan}`,
     ];
@@ -1161,7 +1161,7 @@ export class BrocadeCommandExecutor {
    */
   async configureIPSourceGuard(config: IPSourceGuardConfig): Promise<void> {
     const commands = [
-      'configure terminal',
+      'conf t',
       `interface ethernet ${config.port}`,
       config.enabled ? 'ip verify source' : 'no ip verify source',
     ];
@@ -1180,7 +1180,7 @@ export class BrocadeCommandExecutor {
    */
   async configureDynamicARPInspection(config: DynamicARPInspection): Promise<void> {
     const commands = [
-      'configure terminal',
+      'conf t',
       config.enabled ? `ip arp inspection vlan ${config.vlan}` : `no ip arp inspection vlan ${config.vlan}`,
     ];
 

@@ -267,8 +267,33 @@ export class BrocadeTelnetClient implements BrocadeTransport {
           matchesPasswordPrompt: /password[:\s]*$/i.test(enableStripped),
         });
 
-        if (/password[:\s]*$/i.test(enableStripped)) {
-          // Enable password required
+        if (/user\s*name[:\s]*$/i.test(enableStripped)) {
+          // Brocade 6450 two-step enable: User Name first, then Password
+          const enableUser = this.config.enableUsername || this.config.username;
+          logDebug(this.logger, 'Enable: sending username', { enableUser });
+          await this.sleep(200);
+          const userResult = await this.rawSendAndWait(enableUser + '\r\n', 5000);
+          const userStripped = this.stripAnsi(userResult).trim();
+
+          if (/password[:\s]*$/i.test(userStripped)) {
+            const pw = this.config.enablePassword || this.config.password;
+            logDebug(this.logger, 'Enable: sending password after username');
+            await this.sleep(200);
+            const pwResult = await this.rawSendAndWait(pw + '\r\n', 5000);
+            const pwStripped = this.stripAnsi(pwResult).trim();
+
+            if (this.isPromptLine(pwStripped, '#')) {
+              this.inEnableMode = true;
+              this.detectPrompt(pwStripped);
+              logInfo(this.logger, 'Entered enable mode via username+password');
+            } else {
+              logWarn(this.logger, 'Enable username+password rejected', {
+                response: pwStripped.slice(-80),
+              });
+            }
+          }
+        } else if (/password[:\s]*$/i.test(enableStripped)) {
+          // Single-step enable: just Password
           const pw = this.config.enablePassword || this.config.password;
           logDebug(this.logger, 'Sending enable password', {
             passwordLength: pw.length,

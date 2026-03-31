@@ -179,6 +179,19 @@ export const GetOpticalModuleInfoSchema = z.object({
   port: z.string().optional().describe('Optional specific port identifier'),
 });
 
+// MAC address / routing table / logs schemas
+export const GetMacAddressTableSchema = z.object({
+  vlan: z.number().min(1).max(4094).optional().describe('Optional VLAN ID to filter MAC addresses'),
+});
+
+export const GetRoutingTableSchema = z.object({});
+
+export const GetRunningConfigSchema = z.object({});
+
+export const GetLogSchema = z.object({
+  maxLines: z.number().min(1).max(1000).optional().default(100).describe('Maximum number of log lines to return (default: 100)'),
+});
+
 // Performance / batch operation schemas
 export const ExecuteBatchSchema = z.object({
   commands: z.array(z.string()).min(1).describe('Array of CLI commands to execute in order'),
@@ -226,6 +239,10 @@ export type GetPortSecurityStatusInput = z.infer<typeof GetPortSecurityStatusSch
 export type GetInterfaceStatisticsInput = z.infer<typeof GetInterfaceStatisticsSchema>;
 export type RunCableDiagnosticsInput = z.infer<typeof RunCableDiagnosticsSchema>;
 export type GetOpticalModuleInfoInput = z.infer<typeof GetOpticalModuleInfoSchema>;
+export type GetMacAddressTableInput = z.infer<typeof GetMacAddressTableSchema>;
+export type GetRoutingTableInput = z.infer<typeof GetRoutingTableSchema>;
+export type GetRunningConfigInput = z.infer<typeof GetRunningConfigSchema>;
+export type GetLogInput = z.infer<typeof GetLogSchema>;
 export type ExecuteBatchInput = z.infer<typeof ExecuteBatchSchema>;
 export type PasteConfigInput = z.infer<typeof PasteConfigSchema>;
 export type CreateVlanFullInput = z.infer<typeof CreateVlanFullSchema>;
@@ -251,6 +268,12 @@ export const TOOL_SCHEMAS = {
   get_lldp_neighbors: z.object({}),
   get_network_topology: z.object({}),
   configure_lldp: ConfigureLLDPSchema,
+
+  // MAC address table / routing / config / logs
+  get_mac_address_table: GetMacAddressTableSchema,
+  get_routing_table: GetRoutingTableSchema,
+  get_running_config: GetRunningConfigSchema,
+  get_log: GetLogSchema,
 
   // Layer 2-3 tools
   get_arp_table: z.object({}),

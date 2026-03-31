@@ -76,7 +76,7 @@ Untagged Ports: 10 to 20
       await commandExecutor.configureVlan(200, 'Test-VLAN');
 
       expect(mockSSHClient.executeMultipleCommands).toHaveBeenCalledWith([
-        'configure terminal',
+        'conf t',
         'vlan 200',
         'name Test-VLAN',
         'exit',
@@ -90,7 +90,7 @@ Untagged Ports: 10 to 20
       await commandExecutor.configureVlan(200);
 
       expect(mockSSHClient.executeMultipleCommands).toHaveBeenCalledWith([
-        'configure terminal',
+        'conf t',
         'vlan 200',
         'exit',
         'write memory',
@@ -105,7 +105,7 @@ Untagged Ports: 10 to 20
       await commandExecutor.addPortToVlan('ethernet 1/1/10', 100, false);
 
       expect(mockSSHClient.executeMultipleCommands).toHaveBeenCalledWith([
-        'configure terminal',
+        'conf t',
         'vlan 100',
         'untagged ethernet 1/1/10',
         'exit',
@@ -119,7 +119,7 @@ Untagged Ports: 10 to 20
       await commandExecutor.addPortToVlan('ethernet 1/1/10', 100, true);
 
       expect(mockSSHClient.executeMultipleCommands).toHaveBeenCalledWith([
-        'configure terminal',
+        'conf t',
         'vlan 100',
         'tagged ethernet 1/1/10',
         'exit',

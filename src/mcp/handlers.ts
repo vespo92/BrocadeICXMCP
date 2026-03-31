@@ -247,6 +247,36 @@ async function executeToolHandler(
       break;
     }
 
+    // MAC address table, routing table, config, logs
+    case 'get_mac_address_table': {
+      const { vlan } = validatedArgs as { vlan?: number };
+      let macTable = await commandExecutor.getMacAddressTable();
+      if (vlan) {
+        macTable = macTable.filter(entry => entry.vlan === vlan);
+      }
+      result = JSON.stringify(macTable, null, 2);
+      break;
+    }
+
+    case 'get_routing_table': {
+      const routes = await commandExecutor.getRoutingTable();
+      result = JSON.stringify(routes, null, 2);
+      break;
+    }
+
+    case 'get_running_config': {
+      const runningConfig = await commandExecutor.getRunningConfig();
+      result = runningConfig;
+      break;
+    }
+
+    case 'get_log': {
+      const { maxLines = 100 } = validatedArgs as { maxLines?: number };
+      const logs = await commandExecutor.getLogs(maxLines);
+      result = logs;
+      break;
+    }
+
     // LLDP tools
     case 'get_lldp_neighbors': {
       const neighbors = await commandExecutor.getLLDPNeighbors();
@@ -525,10 +555,11 @@ async function executeToolHandler(
         break;
       }
 
-      // Prepend configure terminal if not already present
+      // Prepend conf t if not already present
       const cmds: string[] = [];
-      if (!configLines[0].toLowerCase().startsWith('configure')) {
-        cmds.push('configure terminal');
+      const firstLine = configLines[0].toLowerCase();
+      if (!firstLine.startsWith('conf')) {
+        cmds.push('conf t');
       }
       cmds.push(...configLines);
 
@@ -560,7 +591,7 @@ async function executeToolHandler(
         untaggedPorts?: string[];
       };
       const vlanCmds: string[] = [
-        'configure terminal',
+        'conf t',
         name ? `vlan ${id} name ${name}` : `vlan ${id}`,
       ];
       if (taggedPorts && taggedPorts.length > 0) {
