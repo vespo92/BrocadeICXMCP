@@ -4,7 +4,6 @@
  */
 
 import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 
 // Tool input schemas
 export const ConfigureVlanSchema = z.object({
@@ -189,7 +188,13 @@ export const GetRoutingTableSchema = z.object({});
 export const GetRunningConfigSchema = z.object({});
 
 export const GetLogSchema = z.object({
-  maxLines: z.number().min(1).max(1000).optional().default(100).describe('Maximum number of log lines to return (default: 100)'),
+  maxLines: z
+    .number()
+    .min(1)
+    .max(1000)
+    .optional()
+    .default(100)
+    .describe('Maximum number of log lines to return (default: 100)'),
 });
 
 // Performance / batch operation schemas
@@ -198,14 +203,19 @@ export const ExecuteBatchSchema = z.object({
 });
 
 export const PasteConfigSchema = z.object({
-  config: z.string().describe('Multi-line configuration block (one command per line, lines starting with ! are ignored)'),
+  config: z
+    .string()
+    .describe('Multi-line configuration block (one command per line, lines starting with ! are ignored)'),
   save: z.boolean().optional().default(false).describe('Run "write memory" after applying config (default: false)'),
 });
 
 export const CreateVlanFullSchema = z.object({
   id: z.number().min(1).max(4094).describe('VLAN ID (1-4094)'),
   name: z.string().describe('VLAN name'),
-  taggedPorts: z.array(z.string()).optional().describe('Array of tagged (trunk) port identifiers (e.g., ["ethernet 1/1/1", "ethernet 2/1/1"])'),
+  taggedPorts: z
+    .array(z.string())
+    .optional()
+    .describe('Array of tagged (trunk) port identifiers (e.g., ["ethernet 1/1/1", "ethernet 2/1/1"])'),
   untaggedPorts: z.array(z.string()).optional().describe('Array of untagged (access) port identifiers'),
 });
 
@@ -327,15 +337,16 @@ export const TOOL_SCHEMAS = {
 export type ToolName = keyof typeof TOOL_SCHEMAS;
 
 /**
- * Convert a Zod schema to JSON Schema for MCP tool definitions
+ * Convert a Zod schema to JSON Schema for MCP tool definitions.
+ * Uses zod 4's built-in `z.toJSONSchema`, inlining refs so the result
+ * is a single flat schema object suitable for MCP tool inputSchema.
  */
-export function toJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
-  const jsonSchema = zodToJsonSchema(schema, {
-    target: 'openApi3',
-    $refStrategy: 'none',
+export function toJsonSchema(schema: z.ZodType): Record<string, unknown> {
+  const jsonSchema = z.toJSONSchema(schema, {
+    target: 'draft-7',
+    reused: 'inline',
   });
 
-  // Remove $schema property that zod-to-json-schema adds
   if (typeof jsonSchema === 'object' && jsonSchema !== null && '$schema' in jsonSchema) {
     const { $schema: _$schema, ...rest } = jsonSchema as Record<string, unknown> & { $schema?: string };
     return rest;

@@ -2,35 +2,35 @@
  * Shared MCP request handlers for both stdio and SSE transports
  */
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import {
-  CallToolRequestSchema,
-  ListResourcesRequestSchema,
-  ListToolsRequestSchema,
-  ReadResourceRequestSchema,
-  ErrorCode,
-  McpError,
-} from '@modelcontextprotocol/sdk/types.js';
+import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type {
   CallToolRequest,
   ListResourcesRequest,
   ListToolsRequest,
   ReadResourceRequest,
 } from '@modelcontextprotocol/sdk/types.js';
-import winston from 'winston';
-import { BrocadeTransport } from '../lib/transport-interface.js';
-import { BrocadeCommandExecutor } from '../lib/brocade-commands.js';
-import { generateTools, getToolCategory, requiresPrivilege } from './tools.js';
-import { generateResources, readResource } from './resources.js';
-import { TOOL_SCHEMAS, ToolName } from './schemas.js';
+import {
+  CallToolRequestSchema,
+  ErrorCode,
+  ListResourcesRequestSchema,
+  ListToolsRequestSchema,
+  McpError,
+  ReadResourceRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
+import type winston from 'winston';
 import {
   isBrocadeError,
+  isCommandExecutionError,
   isSSHConnectionError,
   isTelnetConnectionError,
-  isCommandExecutionError,
   ValidationError,
 } from '../core/errors.js';
-import { logError, logInfo, logDebug, createTimer } from '../core/logger.js';
+import { createTimer, logDebug, logError, logInfo } from '../core/logger.js';
+import type { BrocadeCommandExecutor } from '../lib/brocade-commands.js';
+import type { BrocadeTransport } from '../lib/transport-interface.js';
+import { generateResources, readResource } from './resources.js';
+import { TOOL_SCHEMAS, type ToolName } from './schemas.js';
+import { generateTools, getToolCategory, requiresPrivilege } from './tools.js';
 
 /**
  * Handler dependencies
@@ -45,79 +45,60 @@ export interface HandlerDependencies {
 /**
  * Setup all MCP handlers for a server
  */
-export function setupHandlers(
-  server: Server,
-  deps: HandlerDependencies
-): void {
+export function setupHandlers(server: Server, deps: HandlerDependencies): void {
   const { commandExecutor, logger, transportType } = deps;
 
   // List available tools
-  server.setRequestHandler(
-    ListToolsRequestSchema,
-    async (_request: ListToolsRequest) => {
-      logDebug(logger, 'Listing tools', { transport: transportType });
-      const tools = generateTools(transportType);
-      return { tools };
-    }
-  );
+  server.setRequestHandler(ListToolsRequestSchema, async (_request: ListToolsRequest) => {
+    logDebug(logger, 'Listing tools', { transport: transportType });
+    const tools = generateTools(transportType);
+    return { tools };
+  });
 
   // List available resources
-  server.setRequestHandler(
-    ListResourcesRequestSchema,
-    async (_request: ListResourcesRequest) => {
-      logDebug(logger, 'Listing resources');
-      const resources = generateResources();
-      return { resources };
-    }
-  );
+  server.setRequestHandler(ListResourcesRequestSchema, async (_request: ListResourcesRequest) => {
+    logDebug(logger, 'Listing resources');
+    const resources = generateResources();
+    return { resources };
+  });
 
   // Read a resource
-  server.setRequestHandler(
-    ReadResourceRequestSchema,
-    async (request: ReadResourceRequest) => {
-      const timer = createTimer(logger, `Read resource: ${request.params.uri}`);
-      try {
-        logInfo(logger, 'Reading resource', { uri: request.params.uri });
-        const result = await readResource(request.params.uri, commandExecutor);
-        timer.end(true);
-        return result;
-      } catch (error) {
-        timer.end(false);
-        logError(logger, error, { uri: request.params.uri });
-        throw convertToMcpError(error);
-      }
+  server.setRequestHandler(ReadResourceRequestSchema, async (request: ReadResourceRequest) => {
+    const timer = createTimer(logger, `Read resource: ${request.params.uri}`);
+    try {
+      logInfo(logger, 'Reading resource', { uri: request.params.uri });
+      const result = await readResource(request.params.uri, commandExecutor);
+      timer.end(true);
+      return result;
+    } catch (error) {
+      timer.end(false);
+      logError(logger, error, { uri: request.params.uri });
+      throw convertToMcpError(error);
     }
-  );
+  });
 
   // Execute a tool
-  server.setRequestHandler(
-    CallToolRequestSchema,
-    async (request: CallToolRequest) => {
-      const { name, arguments: args } = request.params;
-      const timer = createTimer(logger, `Execute tool: ${name}`);
+  server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
+    const { name, arguments: args } = request.params;
+    const timer = createTimer(logger, `Execute tool: ${name}`);
 
-      try {
-        logInfo(logger, 'Executing tool', {
-          tool: name,
-          category: getToolCategory(name as ToolName),
-          requiresPrivilege: requiresPrivilege(name as ToolName),
-        });
+    try {
+      logInfo(logger, 'Executing tool', {
+        tool: name,
+        category: getToolCategory(name as ToolName),
+        requiresPrivilege: requiresPrivilege(name as ToolName),
+      });
 
-        const result = await executeToolHandler(
-          name as ToolName,
-          args ?? {},
-          deps
-        );
+      const result = await executeToolHandler(name as ToolName, args ?? {}, deps);
 
-        timer.end(true);
-        return result;
-      } catch (error) {
-        timer.end(false);
-        logError(logger, error, { tool: name });
-        throw convertToMcpError(error);
-      }
+      timer.end(true);
+      return result;
+    } catch (error) {
+      timer.end(false);
+      logError(logger, error, { tool: name });
+      throw convertToMcpError(error);
     }
-  );
+  });
 }
 
 /**
@@ -126,7 +107,7 @@ export function setupHandlers(
 async function executeToolHandler(
   toolName: ToolName,
   args: unknown,
-  deps: HandlerDependencies
+  deps: HandlerDependencies,
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   const { commandExecutor, logger, transportType } = deps;
 
@@ -138,9 +119,7 @@ async function executeToolHandler(
 
   const validationResult = schema.safeParse(args);
   if (!validationResult.success) {
-    const issues = validationResult.error.issues
-      .map(issue => `${issue.path.join('.')}: ${issue.message}`)
-      .join(', ');
+    const issues = validationResult.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', ');
     throw new ValidationError(`Invalid arguments for ${toolName}: ${issues}`, toolName);
   }
 
@@ -182,7 +161,13 @@ async function executeToolHandler(
     }
 
     case 'configure_interface': {
-      const { interfaceName, description, enabled, speed, duplex } = validatedArgs as { interfaceName: string; description?: string; enabled?: boolean; speed?: string; duplex?: string };
+      const { interfaceName, description, enabled, speed, duplex } = validatedArgs as {
+        interfaceName: string;
+        description?: string;
+        enabled?: boolean;
+        speed?: string;
+        duplex?: string;
+      };
       await commandExecutor.configureInterface(interfaceName, {
         description,
         enabled,
@@ -208,9 +193,8 @@ async function executeToolHandler(
 
     case 'backup_config': {
       const { format = 'running' } = validatedArgs as { format?: 'running' | 'startup' };
-      const config = format === 'startup'
-        ? await commandExecutor.getStartupConfig()
-        : await commandExecutor.getRunningConfig();
+      const config =
+        format === 'startup' ? await commandExecutor.getStartupConfig() : await commandExecutor.getRunningConfig();
       result = config;
       break;
     }
@@ -222,7 +206,11 @@ async function executeToolHandler(
     }
 
     case 'configure_port_security': {
-      const { port, maxMacAddresses, violation } = validatedArgs as { port: string; maxMacAddresses: number; violation: string };
+      const { port, maxMacAddresses, violation } = validatedArgs as {
+        port: string;
+        maxMacAddresses: number;
+        violation: string;
+      };
       await commandExecutor.configurePortSecurity(port, maxMacAddresses, violation);
       result = `Port security configured on ${port}: max MACs=${maxMacAddresses}, violation=${violation}`;
       break;
@@ -252,7 +240,7 @@ async function executeToolHandler(
       const { vlan } = validatedArgs as { vlan?: number };
       let macTable = await commandExecutor.getMacAddressTable();
       if (vlan) {
-        macTable = macTable.filter(entry => entry.vlan === vlan);
+        macTable = macTable.filter((entry) => entry.vlan === vlan);
       }
       result = JSON.stringify(macTable, null, 2);
       break;
@@ -291,7 +279,11 @@ async function executeToolHandler(
     }
 
     case 'configure_lldp': {
-      const { enabled, transmitInterval, holdMultiplier } = validatedArgs as { enabled?: boolean; transmitInterval?: number; holdMultiplier?: number };
+      const { enabled, transmitInterval, holdMultiplier } = validatedArgs as {
+        enabled?: boolean;
+        transmitInterval?: number;
+        holdMultiplier?: number;
+      };
       await commandExecutor.configureLLDP({ enabled, transmitInterval, holdMultiplier });
       result = 'LLDP configuration updated successfully';
       break;
@@ -317,7 +309,19 @@ async function executeToolHandler(
     }
 
     case 'configure_static_route': {
-      const { destination, netmask, gateway, distance, interface: iface } = validatedArgs as { destination: string; netmask: string; gateway: string; distance?: number; interface?: string };
+      const {
+        destination,
+        netmask,
+        gateway,
+        distance,
+        interface: iface,
+      } = validatedArgs as {
+        destination: string;
+        netmask: string;
+        gateway: string;
+        distance?: number;
+        interface?: string;
+      };
       await commandExecutor.configureStaticRoute({
         destination,
         netmask,
@@ -330,14 +334,24 @@ async function executeToolHandler(
     }
 
     case 'configure_port_channel': {
-      const { id, ports, type, name } = validatedArgs as { id: number; ports: string[]; type?: 'static' | 'lacp'; name?: string };
+      const { id, ports, type, name } = validatedArgs as {
+        id: number;
+        ports: string[];
+        type?: 'static' | 'lacp';
+        name?: string;
+      };
       await commandExecutor.configurePortChannel({ id, ports, type, name });
       result = `Port channel ${id} configured with ${ports.length} port(s)`;
       break;
     }
 
     case 'configure_layer3_interface': {
-      const { vlan, ipAddress, subnet, description } = validatedArgs as { vlan: number; ipAddress: string; subnet: string; description?: string };
+      const { vlan, ipAddress, subnet, description } = validatedArgs as {
+        vlan: number;
+        ipAddress: string;
+        subnet: string;
+        description?: string;
+      };
       await commandExecutor.configureLayer3Interface({
         vlan,
         ipAddress,
@@ -349,7 +363,13 @@ async function executeToolHandler(
     }
 
     case 'configure_qos': {
-      const { name, priority, dscp, cos, queueId } = validatedArgs as { name: string; priority?: number; dscp?: number; cos?: number; queueId?: number };
+      const { name, priority, dscp, cos, queueId } = validatedArgs as {
+        name: string;
+        priority?: number;
+        dscp?: number;
+        cos?: number;
+        queueId?: number;
+      };
       await commandExecutor.configureQoS({
         name,
         priority,
@@ -388,7 +408,21 @@ async function executeToolHandler(
     }
 
     case 'configure_acl': {
-      const { name, type, rules } = validatedArgs as { name: string; type: 'standard' | 'extended'; rules: Array<{ action: 'permit' | 'deny'; protocol: string; sourceIp?: string; sourceWildcard?: string; destIp?: string; destWildcard?: string; sourcePort?: string; destPort?: string; description?: string }> };
+      const { name, type, rules } = validatedArgs as {
+        name: string;
+        type: 'standard' | 'extended';
+        rules: Array<{
+          action: 'permit' | 'deny';
+          protocol: string;
+          sourceIp?: string;
+          sourceWildcard?: string;
+          destIp?: string;
+          destWildcard?: string;
+          sourcePort?: string;
+          destPort?: string;
+          description?: string;
+        }>;
+      };
       await commandExecutor.configureACL({ name, type, rules });
       result = `ACL "${name}" configured with ${rules.length} rule(s)`;
       break;
@@ -480,7 +514,14 @@ async function executeToolHandler(
     }
 
     case 'configure_dynamic_arp_inspection': {
-      const { vlan, enabled, trustPorts, validateSrcMac, validateDstMac, validateIp } = validatedArgs as { vlan: number; enabled: boolean; trustPorts?: string[]; validateSrcMac?: boolean; validateDstMac?: boolean; validateIp?: boolean };
+      const { vlan, enabled, trustPorts, validateSrcMac, validateDstMac, validateIp } = validatedArgs as {
+        vlan: number;
+        enabled: boolean;
+        trustPorts?: string[];
+        validateSrcMac?: boolean;
+        validateDstMac?: boolean;
+        validateIp?: boolean;
+      };
       await commandExecutor.configureDynamicARPInspection({
         vlan,
         enabled,
@@ -547,8 +588,8 @@ async function executeToolHandler(
       // Split by newline, filter blanks and comments
       const configLines = config
         .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0 && !line.startsWith('!'));
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !line.startsWith('!'));
 
       if (configLines.length === 0) {
         result = 'No valid configuration lines to apply';
@@ -590,10 +631,7 @@ async function executeToolHandler(
         taggedPorts?: string[];
         untaggedPorts?: string[];
       };
-      const vlanCmds: string[] = [
-        'conf t',
-        name ? `vlan ${id} name ${name}` : `vlan ${id}`,
-      ];
+      const vlanCmds: string[] = ['conf t', name ? `vlan ${id} name ${name}` : `vlan ${id}`];
       if (taggedPorts && taggedPorts.length > 0) {
         for (const port of taggedPorts) {
           vlanCmds.push(`tagged ${port}`);
@@ -636,58 +674,32 @@ function convertToMcpError(error: unknown): McpError {
   }
 
   if (isSSHConnectionError(error)) {
-    return new McpError(
-      ErrorCode.InternalError,
-      `SSH connection failed: ${error.message}`,
-      error.details
-    );
+    return new McpError(ErrorCode.InternalError, `SSH connection failed: ${error.message}`, error.details);
   }
 
   if (isTelnetConnectionError(error)) {
-    return new McpError(
-      ErrorCode.InternalError,
-      `Telnet connection failed: ${error.message}`,
-      error.details
-    );
+    return new McpError(ErrorCode.InternalError, `Telnet connection failed: ${error.message}`, error.details);
   }
 
   if (isCommandExecutionError(error)) {
-    return new McpError(
-      ErrorCode.InternalError,
-      `Command execution failed: ${error.message}`,
-      {
-        command: error.command,
-        exitCode: error.exitCode,
-        details: error.details,
-      }
-    );
+    return new McpError(ErrorCode.InternalError, `Command execution failed: ${error.message}`, {
+      command: error.command,
+      exitCode: error.exitCode,
+      details: error.details,
+    });
   }
 
   if (error instanceof ValidationError) {
-    return new McpError(
-      ErrorCode.InvalidParams,
-      error.message,
-      { field: error.field }
-    );
+    return new McpError(ErrorCode.InvalidParams, error.message, { field: error.field });
   }
 
   if (isBrocadeError(error)) {
-    return new McpError(
-      ErrorCode.InternalError,
-      error.message,
-      error.details
-    );
+    return new McpError(ErrorCode.InternalError, error.message, error.details);
   }
 
   if (error instanceof Error) {
-    return new McpError(
-      ErrorCode.InternalError,
-      error.message
-    );
+    return new McpError(ErrorCode.InternalError, error.message);
   }
 
-  return new McpError(
-    ErrorCode.InternalError,
-    'An unknown error occurred'
-  );
+  return new McpError(ErrorCode.InternalError, 'An unknown error occurred');
 }

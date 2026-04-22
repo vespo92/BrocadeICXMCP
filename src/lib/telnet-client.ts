@@ -4,16 +4,12 @@
  * Drop-in replacement for BrocadeSSHClient via the BrocadeTransport interface.
  */
 
-import net from 'net';
-import winston from 'winston';
-import { BrocadeConfig } from '../types/index.js';
-import { BrocadeTransport } from './transport-interface.js';
-import {
-  TelnetConnectionError,
-  CommandExecutionError,
-  TimeoutError,
-} from '../core/errors.js';
-import { logError, logInfo, logDebug, logWarn } from '../core/logger.js';
+import net from 'node:net';
+import type winston from 'winston';
+import { CommandExecutionError, TelnetConnectionError, TimeoutError } from '../core/errors.js';
+import { logDebug, logError, logInfo, logWarn } from '../core/logger.js';
+import type { BrocadeConfig } from '../types/index.js';
+import type { BrocadeTransport } from './transport-interface.js';
 
 // Telnet IAC (Interpret As Command) constants
 const IAC = 0xff;
@@ -29,7 +25,7 @@ const OPT_ECHO = 0x01;
 const OPT_SUPPRESS_GO_AHEAD = 0x03;
 const OPT_TERMINAL_TYPE = 0x18;
 const OPT_NAWS = 0x1f; // Negotiate About Window Size
-const OPT_LINEMODE = 0x22;
+const _OPT_LINEMODE = 0x22;
 
 enum ConnectionState {
   DISCONNECTED = 'disconnected',
@@ -51,13 +47,10 @@ export class BrocadeTelnetClient implements BrocadeTransport {
   private readonly maxRetries: number;
   private readonly retryDelay: number;
 
-  // Prompt detection
-  private promptPattern: RegExp = /.*[>#]\s*$/;
+  // Prompt detection — allow underscores, hyphens, and optional telnet@ prefix in hostnames
+  private promptPattern: RegExp = /(?:telnet@)?[\w.-]+(?:\([^)]*\))?\s*[>#]\s*$/;
   private learnedPrompt: string = '';
   private inEnableMode: boolean = false;
-
-  // Data accumulation buffer for incoming data between commands
-  private dataBuffer: string = '';
 
   constructor(config: BrocadeConfig, logger: winston.Logger) {
     this.config = config;
@@ -106,13 +99,12 @@ export class BrocadeTelnetClient implements BrocadeTransport {
 
         if (this.connectionAttempts >= this.maxRetries) {
           this.state = ConnectionState.ERROR;
-          throw new TelnetConnectionError(
-            `Failed to connect via telnet after ${this.maxRetries} attempts`,
-            { lastError: error }
-          );
+          throw new TelnetConnectionError(`Failed to connect via telnet after ${this.maxRetries} attempts`, {
+            lastError: error,
+          });
         }
 
-        const delay = this.retryDelay * Math.pow(2, this.connectionAttempts - 1);
+        const delay = this.retryDelay * 2 ** (this.connectionAttempts - 1);
         await this.sleep(delay);
       }
     }
@@ -129,7 +121,6 @@ export class BrocadeTelnetClient implements BrocadeTransport {
       }
 
       this.socket = new net.Socket();
-      this.dataBuffer = '';
 
       const port = this.config.port;
       const host = this.config.host;
@@ -188,7 +179,9 @@ export class BrocadeTelnetClient implements BrocadeTransport {
           });
 
           // Try to enter enable mode and set terminal length
-          this.postConnectSetup().then(() => resolve()).catch(() => resolve());
+          this.postConnectSetup()
+            .then(() => resolve())
+            .catch(() => resolve());
         }
       };
 
@@ -197,10 +190,7 @@ export class BrocadeTelnetClient implements BrocadeTransport {
       this.socket.on('error', (err: Error) => {
         clearTimeout(connectionTimer);
         this.state = ConnectionState.ERROR;
-        reject(new TelnetConnectionError(
-          `Telnet connection error: ${err.message}`,
-          { originalError: err }
-        ));
+        reject(new TelnetConnectionError(`Telnet connection error: ${err.message}`, { originalError: err }));
       });
 
       this.socket.on('close', () => {
@@ -229,15 +219,16 @@ export class BrocadeTelnetClient implements BrocadeTransport {
     const lines = text.split('\n');
     const lastLine = lines[lines.length - 1].trim();
 
-    // Match common Brocade prompts: "name>" (user) or "name#" (enable) or "name(config)#"
-    const promptMatch = lastLine.match(/^(\S+(?:\([^)]+\))?)\s*([>#])\s*$/);
+    // Match common Brocade prompts, including telnet@ prefix and underscores/hyphens:
+    // "telnet@SWITCH_1>" "ESPO-855#" "ICX6610(config)#"
+    const promptMatch = lastLine.match(/^((?:telnet@)?[\w.-]+(?:\([^)]+\))?)\s*([>#])\s*$/);
     if (promptMatch) {
       this.learnedPrompt = promptMatch[1];
       this.inEnableMode = promptMatch[2] === '#';
       // Build a regex that matches this prompt in any mode
       const escaped = this.learnedPrompt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      // Match the base hostname with optional (config...) suffix
-      const base = escaped.split('\\(')[0];
+      // Strip the (config...) suffix and optional telnet@ prefix to get base hostname
+      const base = escaped.replace(/^telnet@/, '(?:telnet@)?').split('\\(')[0];
       this.promptPattern = new RegExp(`${base}(?:\\([^)]*\\))?\\s*[>#]\\s*$`);
       logDebug(this.logger, 'Learned prompt pattern', {
         prompt: this.learnedPrompt,
@@ -486,6 +477,42 @@ export class BrocadeTelnetClient implements BrocadeTransport {
   }
 
   /**
+   * Ensure we are in enable mode. After idle timeouts or reconnects the session
+   * may fall back to the unprivileged ">" prompt. This method checks the current
+   * prompt and re-runs the enable auth sequence if needed.
+   */
+  private async ensureEnableMode(): Promise<void> {
+    if (this.inEnableMode) {
+      // Send an empty line to probe the actual prompt
+      try {
+        const probe = await this.rawSendAndWait('\r\n', 3000);
+        const probeStripped = this.stripAnsi(probe).trim();
+        const lines = probeStripped.split('\n');
+        const lastLine = lines[lines.length - 1].trim();
+
+        if (lastLine.endsWith('#')) {
+          // Still in enable (or config) mode — nothing to do
+          return;
+        }
+
+        if (lastLine.endsWith('>')) {
+          // Fell back to unprivileged mode
+          logWarn(this.logger, 'Session fell back to unprivileged mode, re-entering enable');
+          this.inEnableMode = false;
+          this.detectPrompt(probeStripped);
+        }
+      } catch {
+        logWarn(this.logger, 'Probe for enable mode failed, attempting re-enable');
+        this.inEnableMode = false;
+      }
+    }
+
+    if (!this.inEnableMode) {
+      await this.postConnectSetup();
+    }
+  }
+
+  /**
    * Execute a single command and return its output
    */
   async executeCommand(command: string, timeout?: number): Promise<string> {
@@ -496,6 +523,9 @@ export class BrocadeTelnetClient implements BrocadeTransport {
     if (!this.socket || this.socket.destroyed) {
       throw new TelnetConnectionError('Socket is null after connection');
     }
+
+    // Verify enable mode before running any command (idle timeouts can drop us to ">")
+    await this.ensureEnableMode();
 
     const effectiveTimeout = timeout ?? this.config.timeout ?? 30000;
 
@@ -546,10 +576,10 @@ export class BrocadeTelnetClient implements BrocadeTransport {
         }
       };
 
-      this.socket!.on('data', onData);
+      this.socket?.on('data', onData);
 
       // Send the command
-      this.socket!.write(command + '\r\n');
+      this.socket?.write(command + '\r\n');
       commandSent = true;
     });
   }
@@ -601,17 +631,13 @@ export class BrocadeTelnetClient implements BrocadeTransport {
       /Incomplete command/i,
       /Ambiguous input/i,
     ];
-    return errorPatterns.some(pattern => pattern.test(output));
+    return errorPatterns.some((pattern) => pattern.test(output));
   }
 
   /**
    * Execute command with retries
    */
-  async executeCommandWithRetry(
-    command: string,
-    maxAttempts: number = 3,
-    timeout?: number
-  ): Promise<string> {
+  async executeCommandWithRetry(command: string, maxAttempts: number = 3, timeout?: number): Promise<string> {
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -636,12 +662,7 @@ export class BrocadeTelnetClient implements BrocadeTransport {
       }
     }
 
-    throw new CommandExecutionError(
-      `Command failed after ${maxAttempts} attempts`,
-      command,
-      undefined,
-      lastError
-    );
+    throw new CommandExecutionError(`Command failed after ${maxAttempts} attempts`, command, undefined, lastError);
   }
 
   /**
@@ -655,6 +676,7 @@ export class BrocadeTelnetClient implements BrocadeTransport {
     // Remove backspace sequences used to overwrite --More--
     text = text.replace(/[\b]+\s*[\b]*/g, '');
     // Remove control characters except newline/tab
+    // eslint-disable-next-line no-control-regex
     text = text.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
 
     const lines = text.split('\n');
@@ -682,7 +704,7 @@ export class BrocadeTelnetClient implements BrocadeTransport {
 
     // If we never found the command echo, return everything minus the last prompt line
     if (!foundCommand) {
-      const allLines = lines.filter(l => !this.promptPattern.test(l.trim()));
+      const allLines = lines.filter((l) => !this.promptPattern.test(l.trim()));
       return allLines.join('\n').trim();
     }
 
@@ -693,10 +715,12 @@ export class BrocadeTelnetClient implements BrocadeTransport {
    * Strip ANSI escape sequences
    */
   private stripAnsi(text: string): string {
-    // eslint-disable-next-line no-control-regex
-    return text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
-               .replace(/\x1b\][^\x07]*\x07/g, '')
-               .replace(/\x1b[()][0-9A-B]/g, '');
+    /* eslint-disable no-control-regex */
+    return text
+      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+      .replace(/\x1b\][^\x07]*\x07/g, '')
+      .replace(/\x1b[()][0-9A-B]/g, '');
+    /* eslint-enable no-control-regex */
   }
 
   /**
@@ -755,7 +779,9 @@ export class BrocadeTelnetClient implements BrocadeTransport {
 
       if (idleTime > interval * 3 && this.isConnected()) {
         logWarn(this.logger, 'Telnet connection appears stale, reconnecting', { idleTime });
-        this.reconnect();
+        this.reconnect().catch((err) => {
+          logError(this.logger, err, { context: 'keepalive-stale-reconnect' });
+        });
       }
     }, interval);
   }
@@ -851,6 +877,6 @@ export class BrocadeTelnetClient implements BrocadeTransport {
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

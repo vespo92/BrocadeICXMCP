@@ -6,9 +6,9 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { setupHandlers } from '../mcp/handlers.js';
 import { initializeClients, validateEnvironment } from '../core/config.js';
-import { logInfo, logError } from '../core/logger.js';
+import { logError, logInfo } from '../core/logger.js';
+import { setupHandlers } from '../mcp/handlers.js';
 
 /**
  * Main server initialization
@@ -32,7 +32,7 @@ async function main() {
           resources: {},
           tools: {},
         },
-      }
+      },
     );
 
     // Setup shared handlers
