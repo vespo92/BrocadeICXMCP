@@ -51,8 +51,8 @@ export class BrocadeTelnetClient implements BrocadeTransport {
   private readonly maxRetries: number;
   private readonly retryDelay: number;
 
-  // Prompt detection
-  private promptPattern: RegExp = /.*[>#]\s*$/;
+  // Prompt detection — allow underscores, hyphens, and optional telnet@ prefix in hostnames
+  private promptPattern: RegExp = /(?:telnet@)?[\w.-]+(?:\([^)]*\))?\s*[>#]\s*$/;
   private learnedPrompt: string = '';
   private inEnableMode: boolean = false;
 
@@ -229,15 +229,16 @@ export class BrocadeTelnetClient implements BrocadeTransport {
     const lines = text.split('\n');
     const lastLine = lines[lines.length - 1].trim();
 
-    // Match common Brocade prompts: "name>" (user) or "name#" (enable) or "name(config)#"
-    const promptMatch = lastLine.match(/^(\S+(?:\([^)]+\))?)\s*([>#])\s*$/);
+    // Match common Brocade prompts, including telnet@ prefix and underscores/hyphens:
+    // "telnet@SWITCH_1>" "ESPO-855#" "ICX6610(config)#"
+    const promptMatch = lastLine.match(/^((?:telnet@)?[\w.-]+(?:\([^)]+\))?)\s*([>#])\s*$/);
     if (promptMatch) {
       this.learnedPrompt = promptMatch[1];
       this.inEnableMode = promptMatch[2] === '#';
       // Build a regex that matches this prompt in any mode
       const escaped = this.learnedPrompt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      // Match the base hostname with optional (config...) suffix
-      const base = escaped.split('\\(')[0];
+      // Strip the (config...) suffix and optional telnet@ prefix to get base hostname
+      const base = escaped.replace(/^telnet@/, '(?:telnet@)?').split('\\(')[0];
       this.promptPattern = new RegExp(`${base}(?:\\([^)]*\\))?\\s*[>#]\\s*$`);
       logDebug(this.logger, 'Learned prompt pattern', {
         prompt: this.learnedPrompt,
@@ -486,6 +487,42 @@ export class BrocadeTelnetClient implements BrocadeTransport {
   }
 
   /**
+   * Ensure we are in enable mode. After idle timeouts or reconnects the session
+   * may fall back to the unprivileged ">" prompt. This method checks the current
+   * prompt and re-runs the enable auth sequence if needed.
+   */
+  private async ensureEnableMode(): Promise<void> {
+    if (this.inEnableMode) {
+      // Send an empty line to probe the actual prompt
+      try {
+        const probe = await this.rawSendAndWait('\r\n', 3000);
+        const probeStripped = this.stripAnsi(probe).trim();
+        const lines = probeStripped.split('\n');
+        const lastLine = lines[lines.length - 1].trim();
+
+        if (lastLine.endsWith('#')) {
+          // Still in enable (or config) mode — nothing to do
+          return;
+        }
+
+        if (lastLine.endsWith('>')) {
+          // Fell back to unprivileged mode
+          logWarn(this.logger, 'Session fell back to unprivileged mode, re-entering enable');
+          this.inEnableMode = false;
+          this.detectPrompt(probeStripped);
+        }
+      } catch {
+        logWarn(this.logger, 'Probe for enable mode failed, attempting re-enable');
+        this.inEnableMode = false;
+      }
+    }
+
+    if (!this.inEnableMode) {
+      await this.postConnectSetup();
+    }
+  }
+
+  /**
    * Execute a single command and return its output
    */
   async executeCommand(command: string, timeout?: number): Promise<string> {
@@ -496,6 +533,9 @@ export class BrocadeTelnetClient implements BrocadeTransport {
     if (!this.socket || this.socket.destroyed) {
       throw new TelnetConnectionError('Socket is null after connection');
     }
+
+    // Verify enable mode before running any command (idle timeouts can drop us to ">")
+    await this.ensureEnableMode();
 
     const effectiveTimeout = timeout ?? this.config.timeout ?? 30000;
 
@@ -755,7 +795,9 @@ export class BrocadeTelnetClient implements BrocadeTransport {
 
       if (idleTime > interval * 3 && this.isConnected()) {
         logWarn(this.logger, 'Telnet connection appears stale, reconnecting', { idleTime });
-        this.reconnect();
+        this.reconnect().catch(err => {
+          logError(this.logger, err, { context: 'keepalive-stale-reconnect' });
+        });
       }
     }, interval);
   }
