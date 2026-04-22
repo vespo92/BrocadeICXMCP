@@ -237,19 +237,9 @@ export class BrocadeSSHClient implements BrocadeTransport {
       this.client = new Client();
 
       // Brocade keyboard-interactive auth handler
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (this.client as any).on(
-        'keyboard-interactive',
-        (
-          _name: string,
-          _instructions: string,
-          _instructionsLang: string,
-          prompts: Array<{ prompt: string; echo: boolean }>,
-          finish: (responses: string[]) => void,
-        ) => {
-          finish(prompts.map(() => this.config.password));
-        },
-      );
+      this.client.on('keyboard-interactive', (_name, _instructions, _lang, prompts, finish) => {
+        finish(prompts.map(() => this.config.password));
+      });
 
       const connectionTimeout = setTimeout(() => {
         if (this.client) this.client.end();
@@ -728,8 +718,8 @@ export class BrocadeSSHClient implements BrocadeTransport {
   }
 
   private releaseCommandLock(): void {
-    if (this.commandQueue.length > 0) {
-      const next = this.commandQueue.shift()!;
+    const next = this.commandQueue.shift();
+    if (next) {
       next();
     } else {
       this.commandRunning = false;
