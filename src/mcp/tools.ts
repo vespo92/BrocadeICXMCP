@@ -2,8 +2,8 @@
  * MCP tool definitions for Brocade switch management
  */
 
-import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import { generateToolJsonSchemas, ToolName } from './schemas.js';
+import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { generateToolJsonSchemas, type ToolName } from './schemas.js';
 
 // Generate JSON schemas once
 const JSON_SCHEMAS = generateToolJsonSchemas();
@@ -14,7 +14,21 @@ const JSON_SCHEMAS = generateToolJsonSchemas();
 interface ToolMetadata {
   name: ToolName;
   description: string;
-  category: 'info' | 'config' | 'vlan' | 'interface' | 'security' | 'maintenance' | 'lldp' | 'routing' | 'layer3' | 'acl' | 'stack' | 'monitoring' | 'diagnostics' | 'batch';
+  category:
+    | 'info'
+    | 'config'
+    | 'vlan'
+    | 'interface'
+    | 'security'
+    | 'maintenance'
+    | 'lldp'
+    | 'routing'
+    | 'layer3'
+    | 'acl'
+    | 'stack'
+    | 'monitoring'
+    | 'diagnostics'
+    | 'batch';
   requiresPrivilege?: boolean;
 }
 
@@ -204,7 +218,8 @@ const TOOLS_METADATA: ToolMetadata[] = [
   },
   {
     name: 'get_upstream_routing',
-    description: 'Get upstream routing information including default gateway, BGP/OSPF peers, and ACLs for firewall integration',
+    description:
+      'Get upstream routing information including default gateway, BGP/OSPF peers, and ACLs for firewall integration',
     category: 'routing',
   },
 
@@ -309,19 +324,22 @@ const TOOLS_METADATA: ToolMetadata[] = [
   // Performance / batch operation tools
   {
     name: 'execute_batch',
-    description: 'Execute multiple CLI commands in sequence on the switch. Returns all outputs. Use this instead of calling execute_command repeatedly for much faster bulk operations.',
+    description:
+      'Execute multiple CLI commands in sequence on the switch. Returns all outputs. Use this instead of calling execute_command repeatedly for much faster bulk operations.',
     category: 'batch',
     requiresPrivilege: true,
   },
   {
     name: 'paste_config',
-    description: 'Paste a multi-line configuration block into the switch. Automatically enters config mode, executes all lines, and optionally saves. Lines starting with ! are treated as comments and ignored.',
+    description:
+      'Paste a multi-line configuration block into the switch. Automatically enters config mode, executes all lines, and optionally saves. Lines starting with ! are treated as comments and ignored.',
     category: 'batch',
     requiresPrivilege: true,
   },
   {
     name: 'create_vlan_full',
-    description: 'Create a VLAN with name, tagged trunk ports, and untagged access ports in one operation. Automatically enters config mode, creates the VLAN, assigns ports, and saves.',
+    description:
+      'Create a VLAN with name, tagged trunk ports, and untagged access ports in one operation. Automatically enters config mode, creates the VLAN, assigns ports, and saves.',
     category: 'vlan',
     requiresPrivilege: true,
   },
@@ -332,11 +350,10 @@ const TOOLS_METADATA: ToolMetadata[] = [
  */
 export function generateTools(transportType: 'stdio' | 'sse' = 'stdio'): Tool[] {
   // Filter out monitor_interface for stdio transport
-  const metadata = transportType === 'stdio'
-    ? TOOLS_METADATA.filter(t => t.name !== 'monitor_interface')
-    : TOOLS_METADATA;
+  const metadata =
+    transportType === 'stdio' ? TOOLS_METADATA.filter((t) => t.name !== 'monitor_interface') : TOOLS_METADATA;
 
-  return metadata.map(meta => ({
+  return metadata.map((meta) => ({
     name: meta.name,
     description: meta.description,
     inputSchema: {
@@ -351,14 +368,14 @@ export function generateTools(transportType: 'stdio' | 'sse' = 'stdio'): Tool[] 
  */
 export function getToolNames(transportType: 'stdio' | 'sse' = 'stdio'): ToolName[] {
   const tools = generateTools(transportType);
-  return tools.map(t => t.name as ToolName);
+  return tools.map((t) => t.name as ToolName);
 }
 
 /**
  * Check if a tool requires elevated privileges
  */
 export function requiresPrivilege(toolName: ToolName): boolean {
-  const meta = TOOLS_METADATA.find(t => t.name === toolName);
+  const meta = TOOLS_METADATA.find((t) => t.name === toolName);
   return meta?.requiresPrivilege ?? false;
 }
 
@@ -366,6 +383,6 @@ export function requiresPrivilege(toolName: ToolName): boolean {
  * Get tool category
  */
 export function getToolCategory(toolName: ToolName): string {
-  const meta = TOOLS_METADATA.find(t => t.name === toolName);
+  const meta = TOOLS_METADATA.find((t) => t.name === toolName);
   return meta?.category ?? 'unknown';
 }

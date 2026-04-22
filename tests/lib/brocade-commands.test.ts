@@ -1,6 +1,5 @@
 import { BrocadeCommandExecutor } from '../../src/lib/brocade-commands';
-import { BrocadeSSHClient } from '../../src/lib/ssh-client';
-import { VlanInfo, InterfaceInfo } from '../../src/types';
+import type { BrocadeSSHClient } from '../../src/lib/ssh-client';
 
 jest.mock('../../src/lib/ssh-client');
 
@@ -15,7 +14,7 @@ describe('BrocadeCommandExecutor', () => {
       connect: jest.fn(),
       disconnect: jest.fn(),
     } as any;
-    
+
     commandExecutor = new BrocadeCommandExecutor(mockSSHClient);
   });
 

@@ -37,12 +37,7 @@ export class CommandExecutionError extends BrocadeError {
   public readonly command?: string;
   public readonly exitCode?: number;
 
-  constructor(
-    message: string,
-    command?: string,
-    exitCode?: number,
-    details?: unknown
-  ) {
+  constructor(message: string, command?: string, exitCode?: number, details?: unknown) {
     super(message, 'COMMAND_EXECUTION_ERROR', details);
     this.name = 'CommandExecutionError';
     this.command = command;

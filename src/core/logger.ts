@@ -2,27 +2,20 @@
  * Enhanced logger utilities for Brocade MCP Server
  */
 
-import winston from 'winston';
+import type winston from 'winston';
 import { formatError } from './errors.js';
 
 /**
  * Create a child logger with additional context
  */
-export function createChildLogger(
-  parentLogger: winston.Logger,
-  context: Record<string, unknown>
-): winston.Logger {
+export function createChildLogger(parentLogger: winston.Logger, context: Record<string, unknown>): winston.Logger {
   return parentLogger.child(context);
 }
 
 /**
  * Log an error with proper formatting
  */
-export function logError(
-  logger: winston.Logger,
-  error: unknown,
-  context?: Record<string, unknown>
-): void {
+export function logError(logger: winston.Logger, error: unknown, context?: Record<string, unknown>): void {
   const errorMessage = formatError(error);
   const errorData: Record<string, unknown> = {
     message: errorMessage,
@@ -40,11 +33,7 @@ export function logError(
 /**
  * Log a debug message with data
  */
-export function logDebug(
-  logger: winston.Logger,
-  message: string,
-  data?: Record<string, unknown>
-): void {
+export function logDebug(logger: winston.Logger, message: string, data?: Record<string, unknown>): void {
   logger.debug({
     message,
     ...data,
@@ -54,11 +43,7 @@ export function logDebug(
 /**
  * Log an info message with data
  */
-export function logInfo(
-  logger: winston.Logger,
-  message: string,
-  data?: Record<string, unknown>
-): void {
+export function logInfo(logger: winston.Logger, message: string, data?: Record<string, unknown>): void {
   logger.info({
     message,
     ...data,
@@ -68,11 +53,7 @@ export function logInfo(
 /**
  * Log a warning message with data
  */
-export function logWarn(
-  logger: winston.Logger,
-  message: string,
-  data?: Record<string, unknown>
-): void {
+export function logWarn(logger: winston.Logger, message: string, data?: Record<string, unknown>): void {
   logger.warn({
     message,
     ...data,
@@ -94,6 +75,6 @@ export function createTimer(logger: winston.Logger, operation: string) {
         success,
         ...data,
       });
-    }
+    },
   };
 }

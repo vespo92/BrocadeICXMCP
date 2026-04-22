@@ -2,8 +2,8 @@
  * MCP resource definitions for Brocade switch information
  */
 
-import { Resource } from '@modelcontextprotocol/sdk/types.js';
-import { BrocadeCommandExecutor } from '../lib/brocade-commands.js';
+import type { Resource } from '@modelcontextprotocol/sdk/types.js';
+import type { BrocadeCommandExecutor } from '../lib/brocade-commands.js';
 
 /**
  * Resource types available
@@ -70,7 +70,7 @@ export function generateResources(): Resource[] {
  */
 export async function readResource(
   uri: string,
-  commandExecutor: BrocadeCommandExecutor
+  commandExecutor: BrocadeCommandExecutor,
 ): Promise<{ contents: Array<{ text: string; uri: string; mimeType?: string }> }> {
   const contents: Array<{ text: string; uri: string; mimeType?: string }> = [];
 

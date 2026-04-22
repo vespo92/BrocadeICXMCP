@@ -6,11 +6,11 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
-import express from 'express';
 import cors from 'cors';
-import { setupHandlers } from '../mcp/handlers.js';
+import express from 'express';
 import { initializeClients, validateEnvironment } from '../core/config.js';
-import { logInfo, logError } from '../core/logger.js';
+import { logError, logInfo } from '../core/logger.js';
+import { setupHandlers } from '../mcp/handlers.js';
 
 /**
  * Interface monitoring state
@@ -37,16 +37,18 @@ async function main() {
     const app = express();
 
     // Configure middleware
-    app.use(cors({
-      origin: serverConfig.sseCorsOrigin || '*',
-    }));
+    app.use(
+      cors({
+        origin: serverConfig.sseCorsOrigin || '*',
+      }),
+    );
     app.use(express.json());
 
     // Active monitoring sessions
     const monitoringSessions = new Map<string, MonitoringSession>();
 
     // Health check endpoint
-    app.get('/health', async (req, res) => {
+    app.get('/health', async (_req, res) => {
       const isHealthy = await switchClient.healthCheck();
 
       res.json({
@@ -72,7 +74,7 @@ async function main() {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
         'X-Accel-Buffering': 'no', // Disable Nginx buffering
       });
 
@@ -90,7 +92,7 @@ async function main() {
             resources: {},
             tools: {},
           },
-        }
+        },
       );
 
       // Setup shared handlers with SSE-specific extensions

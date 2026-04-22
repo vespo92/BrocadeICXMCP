@@ -7,17 +7,12 @@
  * it, detecting prompts to know when a command has finished.
  */
 
-import { Client, ClientChannel } from 'ssh2';
-import winston from 'winston';
-import { BrocadeConfig } from '../types/index.js';
-import { BrocadeTransport } from './transport-interface.js';
-import {
-  SSHConnectionError,
-  CommandExecutionError,
-  TimeoutError,
-  AuthenticationError,
-} from '../core/errors.js';
-import { logError, logInfo, logDebug, logWarn } from '../core/logger.js';
+import { Client, type ClientChannel } from 'ssh2';
+import type winston from 'winston';
+import { AuthenticationError, CommandExecutionError, SSHConnectionError, TimeoutError } from '../core/errors.js';
+import { logDebug, logError, logInfo, logWarn } from '../core/logger.js';
+import type { BrocadeConfig } from '../types/index.js';
+import type { BrocadeTransport } from './transport-interface.js';
 
 // ---------------------------------------------------------------------------
 // Prompt detection
@@ -103,11 +98,7 @@ export class BrocadeSSHClient implements BrocadeTransport {
   }
 
   isConnected(): boolean {
-    return (
-      this.state === ConnectionState.CONNECTED &&
-      this.client !== null &&
-      this.shell !== null
-    );
+    return this.state === ConnectionState.CONNECTED && this.client !== null && this.shell !== null;
   }
 
   // -----------------------------------------------------------------------
@@ -143,13 +134,10 @@ export class BrocadeSSHClient implements BrocadeTransport {
 
         if (this.connectionAttempts >= this.maxRetries) {
           this.state = ConnectionState.ERROR;
-          throw new SSHConnectionError(
-            `Failed to connect after ${this.maxRetries} attempts`,
-            { lastError: error }
-          );
+          throw new SSHConnectionError(`Failed to connect after ${this.maxRetries} attempts`, { lastError: error });
         }
 
-        const delay = this.retryDelay * Math.pow(2, this.connectionAttempts - 1);
+        const delay = this.retryDelay * 2 ** (this.connectionAttempts - 1);
         await this.sleep(delay);
       }
     }
@@ -167,7 +155,9 @@ export class BrocadeSSHClient implements BrocadeTransport {
       try {
         this.shell.removeAllListeners();
         this.shell.end();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       this.shell = null;
     }
 
@@ -255,10 +245,10 @@ export class BrocadeSSHClient implements BrocadeTransport {
           _instructions: string,
           _instructionsLang: string,
           prompts: Array<{ prompt: string; echo: boolean }>,
-          finish: (responses: string[]) => void
+          finish: (responses: string[]) => void,
         ) => {
           finish(prompts.map(() => this.config.password));
-        }
+        },
       );
 
       const connectionTimeout = setTimeout(() => {
@@ -274,10 +264,7 @@ export class BrocadeSSHClient implements BrocadeTransport {
         .on('error', (err: Error) => {
           clearTimeout(connectionTimeout);
           this.state = ConnectionState.ERROR;
-          if (
-            err.message.includes('authentication') ||
-            err.message.includes('password')
-          ) {
+          if (err.message.includes('authentication') || err.message.includes('password')) {
             reject(new AuthenticationError('SSH authentication failed', { originalError: err.message }));
           } else {
             reject(new SSHConnectionError(`SSH connection error: ${err.message}`, { originalError: err }));
@@ -319,13 +306,7 @@ export class BrocadeSSHClient implements BrocadeTransport {
               'diffie-hellman-group-exchange-sha1',
               'diffie-hellman-group1-sha1',
             ],
-            serverHostKey: [
-              'ssh-rsa',
-              'ssh-dss',
-              'ecdsa-sha2-nistp256',
-              'ecdsa-sha2-nistp384',
-              'ecdsa-sha2-nistp521',
-            ],
+            serverHostKey: ['ssh-rsa', 'ssh-dss', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521'],
             cipher: [
               'aes128-ctr',
               'aes192-ctr',
@@ -359,43 +340,38 @@ export class BrocadeSSHClient implements BrocadeTransport {
         reject(new TimeoutError('Shell open timeout', 15000));
       }, 15000);
 
-      this.client.shell(
-        { term: 'vt100', rows: 24, cols: 200 },
-        (err: Error | undefined, stream: ClientChannel) => {
-          clearTimeout(shellTimeout);
-          if (err) {
-            return reject(
-              new SSHConnectionError(`Failed to open shell: ${err.message}`, { originalError: err })
-            );
-          }
-
-          this.shell = stream;
-          this.shellBuffer = '';
-
-          stream.on('data', (data: Buffer) => {
-            const chunk = data.toString('utf-8');
-            this.shellBuffer += chunk;
-            this.lastActivity = Date.now();
-
-            // Auto-handle --More-- pagination whenever it appears
-            if (MORE_RE.test(this.shellBuffer)) {
-              logDebug(this.logger, 'Detected --More-- prompt, sending space');
-              stream.write(' ');
-            }
-          });
-
-          stream.on('close', () => {
-            logDebug(this.logger, 'Shell channel closed');
-            this.shell = null;
-          });
-
-          stream.stderr.on('data', (data: Buffer) => {
-            logDebug(this.logger, 'Shell stderr', { data: data.toString('utf-8') });
-          });
-
-          resolve();
+      this.client.shell({ term: 'vt100', rows: 24, cols: 200 }, (err: Error | undefined, stream: ClientChannel) => {
+        clearTimeout(shellTimeout);
+        if (err) {
+          return reject(new SSHConnectionError(`Failed to open shell: ${err.message}`, { originalError: err }));
         }
-      );
+
+        this.shell = stream;
+        this.shellBuffer = '';
+
+        stream.on('data', (data: Buffer) => {
+          const chunk = data.toString('utf-8');
+          this.shellBuffer += chunk;
+          this.lastActivity = Date.now();
+
+          // Auto-handle --More-- pagination whenever it appears
+          if (MORE_RE.test(this.shellBuffer)) {
+            logDebug(this.logger, 'Detected --More-- prompt, sending space');
+            stream.write(' ');
+          }
+        });
+
+        stream.on('close', () => {
+          logDebug(this.logger, 'Shell channel closed');
+          this.shell = null;
+        });
+
+        stream.stderr.on('data', (data: Buffer) => {
+          logDebug(this.logger, 'Shell stderr', { data: data.toString('utf-8') });
+        });
+
+        resolve();
+      });
     });
   }
 
@@ -418,9 +394,11 @@ export class BrocadeSSHClient implements BrocadeTransport {
         });
         // Resolve with what we have rather than hard-failing -- the caller
         // can inspect the output for partial results.
-        reject(new TimeoutError(`Timed out waiting for prompt (${timeout}ms)`, timeout, {
-          partialOutput: buf,
-        }));
+        reject(
+          new TimeoutError(`Timed out waiting for prompt (${timeout}ms)`, timeout, {
+            partialOutput: buf,
+          }),
+        );
       }, timeout);
 
       const check = setInterval(() => {
@@ -604,11 +582,7 @@ export class BrocadeSSHClient implements BrocadeTransport {
   /**
    * Execute a command with automatic retries.
    */
-  async executeCommandWithRetry(
-    command: string,
-    maxAttempts: number = 3,
-    timeout?: number
-  ): Promise<string> {
+  async executeCommandWithRetry(command: string, maxAttempts: number = 3, timeout?: number): Promise<string> {
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -632,12 +606,7 @@ export class BrocadeSSHClient implements BrocadeTransport {
       }
     }
 
-    throw new CommandExecutionError(
-      `Command failed after ${maxAttempts} attempts`,
-      command,
-      undefined,
-      lastError
-    );
+    throw new CommandExecutionError(`Command failed after ${maxAttempts} attempts`, command, undefined, lastError);
   }
 
   // -----------------------------------------------------------------------
@@ -671,12 +640,9 @@ export class BrocadeSSHClient implements BrocadeTransport {
         // Return whatever partial output we captured
         const partial = this.shellBuffer;
         this.shellBuffer = '';
-        throw new CommandExecutionError(
-          `Command timed out after ${effectiveTimeout}ms`,
-          command,
-          undefined,
-          { partialOutput: this.cleanOutput(partial, command) }
-        );
+        throw new CommandExecutionError(`Command timed out after ${effectiveTimeout}ms`, command, undefined, {
+          partialOutput: this.cleanOutput(partial, command),
+        });
       }
       throw error;
     }
@@ -890,10 +856,7 @@ export class BrocadeSSHClient implements BrocadeTransport {
         if (this.state === ConnectionState.CONNECTED) {
           clearInterval(iv);
           resolve();
-        } else if (
-          this.state === ConnectionState.ERROR ||
-          this.state === ConnectionState.DISCONNECTED
-        ) {
+        } else if (this.state === ConnectionState.ERROR || this.state === ConnectionState.DISCONNECTED) {
           clearInterval(iv);
           reject(new SSHConnectionError('Connection failed while waiting'));
         } else if (waited >= maxWait) {

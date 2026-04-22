@@ -2,14 +2,14 @@
  * Configuration management with Zod validation
  */
 
-import { z } from 'zod';
 import dotenv from 'dotenv';
 import winston from 'winston';
-import { ConfigurationError } from './errors.js';
+import { z } from 'zod';
+import { BrocadeCommandExecutor } from '../lib/brocade-commands.js';
 import { BrocadeSSHClient } from '../lib/ssh-client.js';
 import { BrocadeTelnetClient } from '../lib/telnet-client.js';
-import { BrocadeTransport } from '../lib/transport-interface.js';
-import { BrocadeCommandExecutor } from '../lib/brocade-commands.js';
+import type { BrocadeTransport } from '../lib/transport-interface.js';
+import { ConfigurationError } from './errors.js';
 
 // Load environment variables
 dotenv.config();
@@ -55,10 +55,8 @@ export function loadBrocadeConfig(): BrocadeConfig {
     // Debug: log enable password env var presence
     const enablePwEnv = process.env.BROCADE_ENABLE_PASSWORD;
     if (enablePwEnv) {
-      // eslint-disable-next-line no-console
       console.error(`[config] BROCADE_ENABLE_PASSWORD is set (length=${enablePwEnv.length})`);
     } else {
-      // eslint-disable-next-line no-console
       console.error('[config] BROCADE_ENABLE_PASSWORD is NOT set');
     }
 
@@ -66,9 +64,7 @@ export function loadBrocadeConfig(): BrocadeConfig {
 
     // Auto-default port: 23 for telnet, 22 for ssh
     const defaultPort = transport === 'telnet' ? 23 : 22;
-    const port = process.env.BROCADE_PORT
-      ? parseInt(process.env.BROCADE_PORT, 10)
-      : defaultPort;
+    const port = process.env.BROCADE_PORT ? parseInt(process.env.BROCADE_PORT, 10) : defaultPort;
 
     const config = BrocadeConfigSchema.parse({
       host: process.env.BROCADE_HOST,
@@ -87,7 +83,7 @@ export function loadBrocadeConfig(): BrocadeConfig {
     return config;
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const issues = error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ');
+      const issues = error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', ');
       throw new ConfigurationError(`Invalid configuration: ${issues}`, error.issues);
     }
     throw error;
@@ -111,7 +107,7 @@ export function loadServerConfig(): ServerConfig {
     return config;
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const issues = error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ');
+      const issues = error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', ');
       throw new ConfigurationError(`Invalid server configuration: ${issues}`, error.issues);
     }
     throw error;
@@ -121,10 +117,7 @@ export function loadServerConfig(): ServerConfig {
 /**
  * Create the appropriate transport client based on configuration
  */
-export function createTransportClient(
-  config: BrocadeConfig,
-  logger: winston.Logger
-): BrocadeTransport {
+export function createTransportClient(config: BrocadeConfig, logger: winston.Logger): BrocadeTransport {
   if (config.transport === 'telnet') {
     logger.info('Using telnet transport', {
       host: config.host,
@@ -153,9 +146,7 @@ export interface InitializedClients {
 /**
  * Initialize all required clients and services
  */
-export function initializeClients(
-  transportType: 'stdio' | 'sse' = 'stdio'
-): InitializedClients {
+export function initializeClients(transportType: 'stdio' | 'sse' = 'stdio'): InitializedClients {
   const serverConfig = loadServerConfig();
   const brocadeConfig = loadBrocadeConfig();
 
@@ -180,44 +171,36 @@ export function initializeClients(
 /**
  * Create a Winston logger instance
  */
-export function createLogger(
-  config: ServerConfig,
-  transportType: 'stdio' | 'sse' = 'stdio'
-): winston.Logger {
+export function createLogger(config: ServerConfig, transportType: 'stdio' | 'sse' = 'stdio'): winston.Logger {
   const transports: winston.transport[] = [];
 
   // Always add file transport if logFile is specified
   if (config.logFile) {
-    transports.push(new winston.transports.File({
-      filename: config.logFile,
-      format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json()
-      )
-    }));
+    transports.push(
+      new winston.transports.File({
+        filename: config.logFile,
+        format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
+      }),
+    );
   } else {
     // Default file transport
-    const filename = transportType === 'sse'
-      ? 'brocade-mcp-sse.log'
-      : 'brocade-mcp.log';
+    const filename = transportType === 'sse' ? 'brocade-mcp-sse.log' : 'brocade-mcp.log';
 
-    transports.push(new winston.transports.File({
-      filename,
-      format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json()
-      )
-    }));
+    transports.push(
+      new winston.transports.File({
+        filename,
+        format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
+      }),
+    );
   }
 
   // Add console transport for SSE server
   if (transportType === 'sse') {
-    transports.push(new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      ),
-    }));
+    transports.push(
+      new winston.transports.Console({
+        format: winston.format.combine(winston.format.colorize(), winston.format.simple()),
+      }),
+    );
   }
 
   return winston.createLogger({
@@ -236,22 +219,18 @@ export function validateEnvironment(): void {
   // Telnet connections may not need username/password (open access)
   if (transport === 'telnet') {
     const required = ['BROCADE_HOST'];
-    const missing = required.filter(key => !process.env[key]);
+    const missing = required.filter((key) => !process.env[key]);
     if (missing.length > 0) {
-      throw new ConfigurationError(
-        `Missing required environment variables: ${missing.join(', ')}`
-      );
+      throw new ConfigurationError(`Missing required environment variables: ${missing.join(', ')}`);
     }
     // Default username/password to empty for telnet if not set
     if (!process.env.BROCADE_USERNAME) process.env.BROCADE_USERNAME = 'admin';
     if (!process.env.BROCADE_PASSWORD) process.env.BROCADE_PASSWORD = 'none';
   } else {
     const required = ['BROCADE_HOST', 'BROCADE_USERNAME', 'BROCADE_PASSWORD'];
-    const missing = required.filter(key => !process.env[key]);
+    const missing = required.filter((key) => !process.env[key]);
     if (missing.length > 0) {
-      throw new ConfigurationError(
-        `Missing required environment variables: ${missing.join(', ')}`
-      );
+      throw new ConfigurationError(`Missing required environment variables: ${missing.join(', ')}`);
     }
   }
 }

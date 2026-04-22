@@ -1,36 +1,36 @@
-import { BrocadeTransport } from './transport-interface.js';
-import {
-  VlanInfo,
-  InterfaceInfo,
-  MacAddressEntry,
-  RouteEntry,
-  SystemInfo,
-  LLDPNeighbor,
-  NetworkTopology,
-  ArpEntry,
-  PortChannel,
-  Layer3Interface,
-  StaticRoute,
-  QoSProfile,
-  BGPNeighbor,
-  OSPFNeighbor,
-  RoutingProtocolStatus,
+import type {
   ACL,
   ACLRule,
-  UpstreamRouting,
+  ArpEntry,
+  BGPNeighbor,
+  CableDiagnostics,
+  DHCPBinding,
+  DHCPSnoopingConfig,
+  DynamicARPInspection,
+  InterfaceInfo,
+  InterfaceStatistics,
+  IPSourceGuardConfig,
+  Layer3Interface,
+  LLDPNeighbor,
+  MacAddressEntry,
+  NetworkTopology,
+  OpticalModuleInfo,
+  OSPFNeighbor,
+  PortChannel,
+  PortSecurityStatus,
+  QoSProfile,
+  RouteEntry,
+  RoutingProtocolStatus,
   StackMember,
   StackPort,
   StackTopology,
-  DHCPSnoopingConfig,
-  DHCPBinding,
-  IPSourceGuardConfig,
-  DynamicARPInspection,
-  PortSecurityStatus,
-  InterfaceStatistics,
+  StaticRoute,
   SystemHealth,
-  CableDiagnostics,
-  OpticalModuleInfo,
+  SystemInfo,
+  UpstreamRouting,
+  VlanInfo,
 } from '../types/index.js';
+import type { BrocadeTransport } from './transport-interface.js';
 
 interface CacheEntry {
   data: unknown;
@@ -108,7 +108,7 @@ export class BrocadeCommandExecutor {
         const vlanMatch = line.match(/PORT-VLAN\s+(\d+),\s+Name\s+([^,]+)/);
         if (vlanMatch) {
           const vlan: VlanInfo = {
-            id: parseInt(vlanMatch[1]),
+            id: parseInt(vlanMatch[1], 10),
             name: vlanMatch[2].trim(),
             ports: [],
             tagged: [],
@@ -169,7 +169,7 @@ export class BrocadeCommandExecutor {
         const parts = line.trim().split(/\s+/);
         const entry: MacAddressEntry = {
           address: match[1],
-          vlan: parseInt(parts[1]) || 1,
+          vlan: parseInt(parts[1], 10) || 1,
           port: parts[2] || '',
           type: parts[3]?.toLowerCase() === 'static' ? 'static' : 'dynamic',
         };
@@ -195,7 +195,7 @@ export class BrocadeCommandExecutor {
           destination: match[1],
           gateway: parts.find((p: string) => p.match(/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/) !== null) ?? '',
           interface: parts.find((p: string) => p.includes('e') || p.includes('ve')) ?? '',
-          metric: parseInt(parts.find((p: string) => !isNaN(parseInt(p))) ?? '0'),
+          metric: parseInt(parts.find((p: string) => !Number.isNaN(parseInt(p, 10))) ?? '0', 10),
         };
         routes.push(route);
       }
@@ -211,7 +211,7 @@ export class BrocadeCommandExecutor {
       name !== undefined && name !== '' ? `name ${name}` : '',
       'exit',
       'write memory',
-    ].filter(cmd => cmd);
+    ].filter((cmd) => cmd);
 
     await this.sshClient.executeMultipleCommands(commands);
     this.invalidateCache();
@@ -230,12 +230,15 @@ export class BrocadeCommandExecutor {
     this.invalidateCache();
   }
 
-  async configureInterface(interfaceName: string, config: {
-    description?: string;
-    enabled?: boolean;
-    speed?: string;
-    duplex?: string;
-  }): Promise<void> {
+  async configureInterface(
+    interfaceName: string,
+    config: {
+      description?: string;
+      enabled?: boolean;
+      speed?: string;
+      duplex?: string;
+    },
+  ): Promise<void> {
     const commands = ['conf t', `interface ${interfaceName}`];
 
     if (config.description !== undefined && config.description !== '') {
@@ -373,7 +376,7 @@ export class BrocadeCommandExecutor {
           neighbor.managementAddress = trimmed.split(':')[1]?.trim() || '';
         } else if (trimmed.includes('Capabilities:')) {
           const caps = trimmed.split(':')[1]?.trim() || '';
-          neighbor.capabilities = caps.split(',').map(c => c.trim());
+          neighbor.capabilities = caps.split(',').map((c) => c.trim());
         }
       }
 
@@ -398,7 +401,7 @@ export class BrocadeCommandExecutor {
     };
 
     // Add local switch
-    topology.switches['local'] = {
+    topology.switches.local = {
       name: systemInfo.hostname,
       description: `${systemInfo.model} - ${systemInfo.firmwareVersion}`,
     };
@@ -469,8 +472,8 @@ export class BrocadeCommandExecutor {
         const entry: ArpEntry = {
           ipAddress: ipMatch[1],
           macAddress: macMatch[1],
-          interface: parts.find(p => p.includes('ethernet') || p.includes('ve')) || 'unknown',
-          age: parts.find(p => p.includes(':') || p.match(/\d+/)) || undefined,
+          interface: parts.find((p) => p.includes('ethernet') || p.includes('ve')) || 'unknown',
+          age: parts.find((p) => p.includes(':') || p.match(/\d+/)) || undefined,
           type: line.toLowerCase().includes('static') ? 'static' : 'dynamic',
         };
         entries.push(entry);
@@ -501,7 +504,7 @@ export class BrocadeCommandExecutor {
         }
 
         currentChannel = {
-          id: parseInt(lagMatch[1]),
+          id: parseInt(lagMatch[1], 10),
           ports: [],
           status: trimmed.toLowerCase().includes('up') ? 'up' : 'down',
           type: trimmed.toLowerCase().includes('lacp') ? 'lacp' : 'static',
@@ -540,7 +543,7 @@ export class BrocadeCommandExecutor {
       if (veMatch) {
         const iface: Layer3Interface = {
           name: `ve${veMatch[1]}`,
-          vlan: parseInt(veMatch[1]),
+          vlan: parseInt(veMatch[1], 10),
           status: line.toLowerCase().includes('up') ? 'up' : 'down',
         };
 
@@ -610,20 +613,13 @@ export class BrocadeCommandExecutor {
     subnet: string;
     description?: string;
   }): Promise<void> {
-    const commands = [
-      'conf t',
-      `interface ve ${config.vlan}`,
-    ];
+    const commands = ['conf t', `interface ve ${config.vlan}`];
 
     if (config.description) {
       commands.push(`port-name ${config.description}`);
     }
 
-    commands.push(
-      `ip address ${config.ipAddress}/${config.subnet}`,
-      'exit',
-      'write memory'
-    );
+    commands.push(`ip address ${config.ipAddress}/${config.subnet}`, 'exit', 'write memory');
 
     await this.sshClient.executeMultipleCommands(commands);
     this.invalidateCache();
@@ -674,7 +670,7 @@ export class BrocadeCommandExecutor {
 
         if (trimmed.includes('remote AS')) {
           const asnMatch = trimmed.match(/remote AS (\d+)/i);
-          if (asnMatch) neighbor.asn = parseInt(asnMatch[1]);
+          if (asnMatch) neighbor.asn = parseInt(asnMatch[1], 10);
         }
 
         if (trimmed.includes('BGP state')) {
@@ -705,12 +701,14 @@ export class BrocadeCommandExecutor {
     const lines = output.split('\n');
 
     for (const line of lines) {
-      const match = line.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(\d+)\s+(\w+)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+([\w/]+)/);
+      const match = line.match(
+        /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(\d+)\s+(\w+)\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+([\w/]+)/,
+      );
 
       if (match) {
         neighbors.push({
           routerId: match[1],
-          priority: parseInt(match[2]),
+          priority: parseInt(match[2], 10),
           state: match[3],
           address: match[4],
           interface: match[5],
@@ -788,7 +786,7 @@ export class BrocadeCommandExecutor {
         const seqMatch = line.match(/^(\d+)\s+(permit|deny)\s+(.+)/i);
         if (seqMatch) {
           const rule: ACLRule = {
-            sequence: parseInt(seqMatch[1]),
+            sequence: parseInt(seqMatch[1], 10),
             action: seqMatch[2].toLowerCase() as 'permit' | 'deny',
             protocol: 'ip',
           };
@@ -817,10 +815,7 @@ export class BrocadeCommandExecutor {
     type: 'standard' | 'extended';
     rules: Omit<ACLRule, 'sequence'>[];
   }): Promise<void> {
-    const commands = [
-      'conf t',
-      `ip access-list ${config.type} ${config.name}`,
-    ];
+    const commands = ['conf t', `ip access-list ${config.type} ${config.name}`];
 
     for (let i = 0; i < config.rules.length; i++) {
       const rule = config.rules[i];
@@ -859,13 +854,11 @@ export class BrocadeCommandExecutor {
     const acls = await this.getACLs();
 
     // Find default gateway
-    const defaultRoute = routes.find(r =>
-      r.destination === '0.0.0.0/0' || r.destination === '0.0.0.0'
-    );
+    const defaultRoute = routes.find((r) => r.destination === '0.0.0.0/0' || r.destination === '0.0.0.0');
 
     return {
       defaultGateway: defaultRoute?.gateway,
-      primaryRoutes: routes.filter(r => !r.destination.includes('0.0.0.0')),
+      primaryRoutes: routes.filter((r) => !r.destination.includes('0.0.0.0')),
       bgpPeers: protocols.bgp?.neighbors,
       ospfNeighbors: protocols.ospf?.neighbors,
       acls,
@@ -919,9 +912,9 @@ export class BrocadeCommandExecutor {
         const memberMatch = trimmed.match(/^(\d+)\s+([0-9a-fA-F:.]+)\s+(\d+)\s+(\w+)\s+(\w+)\s+(.+)/i);
         if (memberMatch) {
           const member: StackMember = {
-            unitId: parseInt(memberMatch[1]),
+            unitId: parseInt(memberMatch[1], 10),
             macAddress: memberMatch[2],
-            priority: parseInt(memberMatch[3]),
+            priority: parseInt(memberMatch[3], 10),
             role: memberMatch[4].toLowerCase() as 'master' | 'backup' | 'member' | 'standalone',
             state: memberMatch[5].toLowerCase() as 'local' | 'remote' | 'reserved',
             model: memberMatch[6].trim(),
@@ -973,9 +966,9 @@ export class BrocadeCommandExecutor {
       const portMatch = trimmed.match(/^(\d+)\s+(\S+)\s+(\d+)?\s+(\w+)\s+(\S+)?/i);
       if (portMatch) {
         const port: StackPort = {
-          unitId: parseInt(portMatch[1]),
+          unitId: parseInt(portMatch[1], 10),
           portId: portMatch[2],
-          neighbor: portMatch[3] ? parseInt(portMatch[3]) : undefined,
+          neighbor: portMatch[3] ? parseInt(portMatch[3], 10) : undefined,
           status: portMatch[4].toLowerCase() === 'up' ? 'up' : 'down',
           speed: portMatch[5],
         };
@@ -991,20 +984,14 @@ export class BrocadeCommandExecutor {
    */
   async getStackMember(unitId: number): Promise<StackMember | null> {
     const topology = await this.getStackTopology();
-    return topology.members.find(m => m.unitId === unitId) || null;
+    return topology.members.find((m) => m.unitId === unitId) || null;
   }
 
   /**
    * Configure stack priority for a unit
    */
   async configureStackPriority(unitId: number, priority: number): Promise<void> {
-    const commands = [
-      'conf t',
-      `stack unit ${unitId}`,
-      `priority ${priority}`,
-      'exit',
-      'write memory',
-    ];
+    const commands = ['conf t', `stack unit ${unitId}`, `priority ${priority}`, 'exit', 'write memory'];
 
     await this.sshClient.executeMultipleCommands(commands);
     this.invalidateCache();
@@ -1013,16 +1000,8 @@ export class BrocadeCommandExecutor {
   /**
    * Configure stack ports
    */
-  async configureStackPorts(config: {
-    unitId: number;
-    port1: string;
-    port2?: string;
-  }): Promise<void> {
-    const commands = [
-      'conf t',
-      `stack unit ${config.unitId}`,
-      `stack-port ${config.port1}`,
-    ];
+  async configureStackPorts(config: { unitId: number; port1: string; port2?: string }): Promise<void> {
+    const commands = ['conf t', `stack unit ${config.unitId}`, `stack-port ${config.port1}`];
 
     if (config.port2) {
       commands.push(`stack-port ${config.port2}`);
@@ -1037,13 +1016,7 @@ export class BrocadeCommandExecutor {
    * Renumber a stack unit
    */
   async renumberStackUnit(currentId: number, newId: number): Promise<void> {
-    const commands = [
-      'conf t',
-      `stack unit ${currentId}`,
-      `renumber ${newId}`,
-      'exit',
-      'write memory',
-    ];
+    const commands = ['conf t', `stack unit ${currentId}`, `renumber ${newId}`, 'exit', 'write memory'];
 
     await this.sshClient.executeMultipleCommands(commands);
     this.invalidateCache();
@@ -1053,12 +1026,7 @@ export class BrocadeCommandExecutor {
    * Enable or disable stack
    */
   async configureStack(enabled: boolean): Promise<void> {
-    const commands = [
-      'conf t',
-      enabled ? 'stack enable' : 'stack disable',
-      'exit',
-      'write memory',
-    ];
+    const commands = ['conf t', enabled ? 'stack enable' : 'stack disable', 'exit', 'write memory'];
 
     await this.sshClient.executeMultipleCommands(commands);
     this.invalidateCache();
@@ -1084,10 +1052,10 @@ export class BrocadeCommandExecutor {
     const topology = await this.getStackTopology();
     const ports = await this.getStackPorts();
 
-    const hasMaster = topology.members.some(m => m.role === 'master');
-    const hasBackup = topology.members.some(m => m.role === 'backup');
-    const allPortsUp = ports.length > 0 && ports.every(p => p.status === 'up');
-    const degradedLinks = ports.filter(p => p.status === 'down').length;
+    const hasMaster = topology.members.some((m) => m.role === 'master');
+    const hasBackup = topology.members.some((m) => m.role === 'backup');
+    const allPortsUp = ports.length > 0 && ports.every((p) => p.status === 'up');
+    const degradedLinks = ports.filter((p) => p.status === 'down').length;
 
     return {
       topology,
@@ -1119,11 +1087,7 @@ export class BrocadeCommandExecutor {
 
     if (config.trustPorts && config.trustPorts.length > 0) {
       for (const port of config.trustPorts) {
-        commands.push(
-          `interface ethernet ${port}`,
-          'ip dhcp snooping trust',
-          'exit'
-        );
+        commands.push(`interface ethernet ${port}`, 'ip dhcp snooping trust', 'exit');
       }
     }
 
@@ -1147,7 +1111,7 @@ export class BrocadeCommandExecutor {
         bindings.push({
           macAddress: match[1],
           ipAddress: match[2],
-          vlan: parseInt(match[3]),
+          vlan: parseInt(match[3], 10),
           interface: match[4],
         });
       }
@@ -1197,11 +1161,7 @@ export class BrocadeCommandExecutor {
 
       if (config.trustPorts && config.trustPorts.length > 0) {
         for (const port of config.trustPorts) {
-          commands.push(
-            `interface ethernet ${port}`,
-            'ip arp inspection trust',
-            'exit'
-          );
+          commands.push(`interface ethernet ${port}`, 'ip arp inspection trust', 'exit');
         }
       }
     }
@@ -1227,8 +1187,8 @@ export class BrocadeCommandExecutor {
         statuses.push({
           port: match[1],
           enabled: match[2].toLowerCase() === 'enabled',
-          maxMacAddresses: parseInt(match[3]),
-          currentMacCount: parseInt(match[4]),
+          maxMacAddresses: parseInt(match[3], 10),
+          currentMacCount: parseInt(match[4], 10),
           violationMode: match[5].toLowerCase() as 'shutdown' | 'restrict' | 'protect',
           secureAddresses: [],
         });
@@ -1244,9 +1204,7 @@ export class BrocadeCommandExecutor {
    * Get interface statistics
    */
   async getInterfaceStatistics(interfaceName?: string): Promise<InterfaceStatistics[]> {
-    const command = interfaceName
-      ? `show statistics ethernet ${interfaceName}`
-      : 'show statistics';
+    const command = interfaceName ? `show statistics ethernet ${interfaceName}` : 'show statistics';
     const output = await this.sshClient.executeCommand(command);
     const stats: InterfaceStatistics[] = [];
 
@@ -1268,35 +1226,35 @@ export class BrocadeCommandExecutor {
         // Parse statistics
         if (trimmed.includes('InOctets')) {
           const match = trimmed.match(/(\d+)/);
-          if (match) stat.inputBytes = parseInt(match[1]);
+          if (match) stat.inputBytes = parseInt(match[1], 10);
         }
         if (trimmed.includes('InPkts') || trimmed.includes('Input packets')) {
           const match = trimmed.match(/(\d+)/);
-          if (match) stat.inputPackets = parseInt(match[1]);
+          if (match) stat.inputPackets = parseInt(match[1], 10);
         }
         if (trimmed.includes('OutOctets')) {
           const match = trimmed.match(/(\d+)/);
-          if (match) stat.outputBytes = parseInt(match[1]);
+          if (match) stat.outputBytes = parseInt(match[1], 10);
         }
         if (trimmed.includes('OutPkts') || trimmed.includes('Output packets')) {
           const match = trimmed.match(/(\d+)/);
-          if (match) stat.outputPackets = parseInt(match[1]);
+          if (match) stat.outputPackets = parseInt(match[1], 10);
         }
         if (trimmed.includes('InErrors') || trimmed.includes('Input errors')) {
           const match = trimmed.match(/(\d+)/);
-          if (match) stat.inputErrors = parseInt(match[1]);
+          if (match) stat.inputErrors = parseInt(match[1], 10);
         }
         if (trimmed.includes('OutErrors') || trimmed.includes('Output errors')) {
           const match = trimmed.match(/(\d+)/);
-          if (match) stat.outputErrors = parseInt(match[1]);
+          if (match) stat.outputErrors = parseInt(match[1], 10);
         }
         if (trimmed.includes('CRC')) {
           const match = trimmed.match(/(\d+)/);
-          if (match) stat.crcErrors = parseInt(match[1]);
+          if (match) stat.crcErrors = parseInt(match[1], 10);
         }
         if (trimmed.includes('Collisions')) {
           const match = trimmed.match(/(\d+)/);
-          if (match) stat.collisions = parseInt(match[1]);
+          if (match) stat.collisions = parseInt(match[1], 10);
         }
       }
 
@@ -1334,7 +1292,7 @@ export class BrocadeCommandExecutor {
     // Parse CPU
     const cpuMatch = cpuOutput.match(/(\d+)%/);
     if (cpuMatch) {
-      health.cpu.current = parseInt(cpuMatch[1]);
+      health.cpu.current = parseInt(cpuMatch[1], 10);
     }
 
     // Parse memory
@@ -1342,15 +1300,15 @@ export class BrocadeCommandExecutor {
     for (const line of memLines) {
       if (line.includes('Total')) {
         const match = line.match(/(\d+)/);
-        if (match) health.memory.total = parseInt(match[1]);
+        if (match) health.memory.total = parseInt(match[1], 10);
       }
       if (line.includes('Used')) {
         const match = line.match(/(\d+)/);
-        if (match) health.memory.used = parseInt(match[1]);
+        if (match) health.memory.used = parseInt(match[1], 10);
       }
       if (line.includes('Free')) {
         const match = line.match(/(\d+)/);
-        if (match) health.memory.free = parseInt(match[1]);
+        if (match) health.memory.free = parseInt(match[1], 10);
       }
     }
 
@@ -1364,8 +1322,8 @@ export class BrocadeCommandExecutor {
       const tempMatch = tempOutput.match(/Temperature:\s+(\d+)/i);
       if (tempMatch) {
         health.temperature = {
-          current: parseInt(tempMatch[1]),
-          status: parseInt(tempMatch[1]) > 70 ? 'warning' : 'normal',
+          current: parseInt(tempMatch[1], 10),
+          status: parseInt(tempMatch[1], 10) > 70 ? 'warning' : 'normal',
         };
       }
     } catch {
@@ -1394,9 +1352,9 @@ export class BrocadeCommandExecutor {
         const pairMatch = line.match(/Pair\s+(\d+):\s+(\w+)(?:\s+(\d+)\s*(?:m|meters)?)?/i);
         if (pairMatch) {
           diagnostic.pairs.push({
-            pair: parseInt(pairMatch[1]),
+            pair: parseInt(pairMatch[1], 10),
             status: pairMatch[2].toLowerCase() as 'ok' | 'open' | 'short',
-            length: pairMatch[3] ? parseInt(pairMatch[3]) : undefined,
+            length: pairMatch[3] ? parseInt(pairMatch[3], 10) : undefined,
           });
 
           if (pairMatch[2].toLowerCase() !== 'ok') {
